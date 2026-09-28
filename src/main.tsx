@@ -5,10 +5,13 @@ import { loadMeasureFonts, preloadSdfFonts } from './render/fonts'
 import { clearMeasureCache } from './board/text'
 import { useView } from './board/viewStore'
 import { bootPersistence } from './app/persistence'
+import { bootIntegrations } from './app/integrations'
+import { useIntegrations } from './integrations/store'
 import { detectDeviceCapabilities } from './xr/capabilities'
 import { App } from './app/App'
 
-void bootPersistence()
+// Integrations are optional: without a sync backend this finds no `/api` and stays dormant.
+void bootPersistence().then(() => bootIntegrations((provider) => useIntegrations.getState().openPanel(provider)))
 // In dev, emulate a Quest 3 first (if needed) so capability detection sees it.
 void (import.meta.env.DEV ? import('./xr/emulator').then((m) => m.installDevEmulator()) : Promise.resolve(false)).then(() => detectDeviceCapabilities())
 void preloadSdfFonts()

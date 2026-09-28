@@ -1,0 +1,24 @@
+# Copy to .dev.vars for `npm run worker:dev`. Every integration is optional:
+# leave a tool's lines out and it simply won't be offered.
+
+# Required for any integration. Any long random string, e.g. `openssl rand -base64 32`.
+TOKEN_ENCRYPTION_KEY=
+
+# Set when you open the app through `npm run dev:sync` (Vite on :5173), so
+# OAuth callbacks come back to the dev server.
+# PUBLIC_URL=http://localhost:5173
+
+# GitHub Projects: an OAuth App (github.com/settings/developers).
+# GITHUB_CLIENT_ID=
+# GITHUB_CLIENT_SECRET=
+
+# Trello: an API key from trello.com/power-ups/admin.
+# TRELLO_API_KEY=
+
+# Linear: an OAuth application (Linear → Settings → API).
+# LINEAR_CLIENT_ID=
+# LINEAR_CLIENT_SECRET=
+
+# Jira Cloud: an OAuth 2.0 (3LO) app (developer.atlassian.com/console/myapps).
+# JIRA_CLIENT_ID=
+# JIRA_CLIENT_SECRET=

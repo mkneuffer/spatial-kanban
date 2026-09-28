@@ -1,5 +1,5 @@
 import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react'
-import type { BoardDoc, Card } from '../../data/model'
+import { cardRef, type BoardDoc, type Card } from '../../data/model'
 import { hash01 } from '../../board/space'
 import { initials } from '../../skins/projects/layout'
 import { cardDates } from '../../data/dates'
@@ -39,12 +39,12 @@ export const FlatCard = forwardRef<HTMLDivElement, Props>(function FlatCard({ ca
       ref={ref}
       className={`card${dragging ? ' dragging' : ''}${overlay ? ' overlay' : ''}`}
       style={s}
-      aria-label={`${card.number ? `#${card.number} ` : ''}${card.title}. ${describedBy}`}
+      aria-label={`${cardRef(card) ? `${cardRef(card)} ` : ''}${card.title}. ${describedBy}`}
       {...rest}
     >
       <div className="meta">
         <span className="ring" style={{ color: column?.color ?? 'var(--muted)' }} aria-hidden="true" />
-        {card.number && <span>#{card.number}</span>}
+        {cardRef(card) && <span>{cardRef(card)}</span>}
         {parked && <span className="parked-badge">· parked in room</span>}
       </div>
       <div className="title">{card.title || 'Untitled'}</div>

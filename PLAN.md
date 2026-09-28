@@ -435,7 +435,7 @@ interface Board {
   labels: Label[];
   createdAt: string;
   updatedAt: string;
-  integration?: { kind: 'github-project'; projectId: string; statusFieldId: string };
+  integration?: { provider: 'github' | 'trello' | 'linear' | 'jira'; remoteId: string; name: string; url?: string };
 }
 
 interface Column {
@@ -444,7 +444,7 @@ interface Column {
   title: string;
   color?: string;
   wipLimit?: number;
-  externalOptionId?: string;  // e.g. GitHub single-select option id
+  externalId?: string;        // remote column: GitHub Status option, Trello list, Linear/Jira status
 }
 
 interface Card {
@@ -459,7 +459,7 @@ interface Card {
   dueDate?: string;
   color?: string;             // explicit color override (sticky skin)
   archived: boolean;
-  externalRef?: { kind: 'github-issue'; url: string; number: number };
+  externalRef?: { provider: ProviderId; id: string; url?: string; key?: string; meta?: Record<string, string> };
   skinData?: {                // presentation hints, namespaced per skin
     sticky?: { offset?: [number, number]; rotation?: number };
   };
@@ -512,6 +512,7 @@ interface FreeCardPlacement {
 | State | **Zustand** (plus Immer) | Small, fast, and works outside React for the per-frame XR loop | Redux Toolkit |
 | Local persistence | **IndexedDB** via **Dexie** | Offline-first and structured | localStorage (too small) |
 | Sync *(phase 3)* | **Yjs** + y-websocket / y-indexeddb | CRDT with offline merge | Liveblocks, PartyKit, Automerge |
+| Integrations backend *(built)* | **Cloudflare Worker** + **D1** | Serves the app and a small OAuth/API proxy on one origin; tokens never reach the browser | A separate Node server |
 | 2D fallback UI | React + dnd-kit | Uses the same store and actions | — |
 | Testing | **Vitest**, **Playwright**, **IWER** | See §15 | — |
 
@@ -548,7 +549,8 @@ spatial-kanban/
 │  │  ├─ store.ts             # Zustand store + actions
 │  │  ├─ ordering.ts          # fractional index helpers
 │  │  ├─ persistence.ts       # Dexie schema + load/save
-│  │  └─ sync/                # Yjs binding, integrations (github.ts)
+│  │  └─ sync/                # Yjs binding (not built)
+│  ├─ integrations/           # built: protocol, three-way sync planner, engine, API client
 │  ├─ xr/
 │  │  ├─ capabilities.ts      # feature detection
 │  │  ├─ session.tsx          # XR store/provider, enter/exit
@@ -636,12 +638,14 @@ spatial-kanban/
 
 ### Integrations *(phase 3+)*
 
+> **Built.** See the README's Integrations section. A Cloudflare Worker (`worker/`) serves the app and `/api`; D1 holds sessions and encrypted tokens. Each tool is a `ProviderAdapter` (list boards, read a board, apply one op). The client syncs by polling (30 s, plus on focus) with a three-way merge against a per-device shadow, so it needs no webhooks.
+
 - **GitHub Projects (v2)** through the GraphQL API:
   - Map board columns to the project's **Status** single-select field options.
   - Map cards to project items (issues, PRs, or draft issues).
   - Moving a card calls `updateProjectV2ItemFieldValue`.
-  - Pull changes by polling or webhooks through a small proxy that handles OAuth and keeps the token off the client.
-- Later: Linear, Trello, Jira. Each one is an adapter behind the same `IntegrationAdapter` interface.
+  - The Worker handles OAuth and keeps the token off the client.
+- **Trello** (lists and cards), **Linear** (a team's workflow states and issues) and **Jira Cloud** (a project's statuses and issues, moved through workflow transitions), each an adapter behind the same interface.
 
 ---
 
@@ -696,8 +700,8 @@ spatial-kanban/
 ### Phase 3: Sync and integrations (4+ weeks)
 
 - [ ] Yjs sync with presence
-- [ ] Accounts (OAuth) and multiple boards
-- [ ] Two-way GitHub Projects sync
+- [x] Accounts (OAuth) and multiple boards (sign-in via the connected tools)
+- [x] Two-way GitHub Projects sync, plus Trello, Linear and Jira
 - [ ] Share links
 - **Exit criteria:** two people on different devices move cards on the same board and see each other's changes within 1 s.
 
@@ -730,7 +734,7 @@ spatial-kanban/
 1. Should the free-floating mode follow the user (lazy follow), or stay strictly world-locked?
 2. Should a torn-off card still count as "in" its column, or move to a special "parked" state?
 3. Does the whiteboard skin allow cards *between* columns (free canvas), or always keep column membership?
-4. Is GitHub the first integration, or would Linear or Trello users be a better early audience?
+4. ~~Is GitHub the first integration, or would Linear or Trello users be a better early audience?~~ Resolved: all four shipped together behind one adapter interface.
 5. What's the minimum board, or column-plus-card count, where wall mode clearly beats a monitor? It would be worth testing with users early.
 
 ---

@@ -20,6 +20,8 @@ export type BoardAction =
   | { type: 'label/upsert'; label: Label }
   | { type: 'label/delete'; id: ID }
   | { type: 'doc/replace'; doc: BoardDoc }
+  /** Changes pulled from a linked online board (integrations). */
+  | { type: 'sync/apply'; board?: Board; columns?: Column[]; cards?: Card[] }
 
 /**
  * Applies an action to a mutable draft (used with Immer). Pure with respect to
@@ -132,10 +134,31 @@ export function applyAction(draft: BoardDoc, action: BoardAction, now: string): 
       draft.cards = action.doc.cards
       break
     }
+    case 'sync/apply': {
+      if (action.board) draft.board = action.board
+      for (const column of action.columns ?? []) draft.columns[column.id] = column
+      for (const card of action.cards ?? []) draft.cards[card.id] = card
+      break
+    }
   }
 }
 
 /** Actions that are not worth an undo step on their own. */
 export function isUndoable(action: BoardAction): boolean {
-  return action.type !== 'doc/replace'
+  return action.type !== 'doc/replace' && action.type !== 'sync/apply'
+}
+
+/** Actions after which earlier undo steps no longer make sense. */
+export function clearsHistory(action: BoardAction): boolean {
+  return action.type === 'doc/replace'
+}
+
+/** The `sync/apply` action that turns `doc` into `next` (null when they're the same). */
+export function syncDiff(doc: BoardDoc, next: BoardDoc): Extract<BoardAction, { type: 'sync/apply' }> | null {
+  if (doc === next) return null
+  const columns = Object.values(next.columns).filter((c) => doc.columns[c.id] !== c)
+  const cards = Object.values(next.cards).filter((c) => doc.cards[c.id] !== c)
+  const board = doc.board !== next.board ? next.board : undefined
+  if (!board && !columns.length && !cards.length) return null
+  return { type: 'sync/apply', board, columns, cards }
 }

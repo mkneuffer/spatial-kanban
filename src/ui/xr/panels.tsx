@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { PlacementMode, ScalePreset } from '../../data/model'
+import { cardRef, type PlacementMode, type ScalePreset } from '../../data/model'
 import { useBoardStore } from '../../data/store'
 import { useSettings } from '../../data/settings'
 import { cardsInColumn } from '../../data/ordering'
@@ -161,7 +161,7 @@ export function DetailPanel3D({ cardId, onEditTitle }: { cardId: string; onEditT
   return (
     <Panel width={W} height={H} radius={0.024}>
       <Label size={0.014} color={UI.muted} anchorX="left" position={[-W / 2 + 0.02, top - 0.03, 0]}>
-        {`${card.number ? `#${card.number} · ` : ''}${column.title}`}
+        {`${cardRef(card) ? `${cardRef(card)} · ` : ''}${column.title}`}
       </Label>
       <Button3D label="Close" width={0.08} height={0.034} variant="ghost" position={[W / 2 - 0.055, top - 0.03, 0]} onClick={close} />
       <Label size={0.024} weight={600} anchorX="left" anchorY="top" maxWidth={W - 0.04} lineHeight={1.2} position={[-W / 2 + 0.02, top - 0.058, 0]}>
