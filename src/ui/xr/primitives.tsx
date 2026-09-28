@@ -15,7 +15,7 @@ export const UI = {
   buttonHover: '#2a3544',
   buttonActive: '#2f81f7',
   text: '#e8edf3',
-  muted: '#9aa4b1',
+  muted: '#b1bac5',
   accent: '#4493f8',
   danger: '#f85149',
   success: '#3fb950',
@@ -249,7 +249,7 @@ export function Button3D({
           {label}
         </Label>
         {sublabel && (
-          <Label size={Math.max(0.011, fs * 0.5)} color={UI.muted} weight={400} anchorY="top" lineHeight={1.25} position={[icon ? height * 0.25 : 0, -height * 0.02, 0.002]} maxWidth={width - 0.03}>
+          <Label size={Math.max(0.0125, fs * 0.52)} color={UI.muted} weight={400} anchorY="top" lineHeight={1.25} position={[icon ? height * 0.25 : 0, -height * 0.02, 0.002]} maxWidth={width - 0.03}>
             {sublabel}
           </Label>
         )}

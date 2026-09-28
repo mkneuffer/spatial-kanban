@@ -6,10 +6,10 @@ import { usePlacements } from '../data/placements'
 import { useSettings } from '../data/settings'
 import type { SkinMotion } from '../skins/types'
 import type { CardAnim, AnimTarget } from './animator'
-import { NEW_CARD_ID, trailVelocity } from './drag'
+import { NEW_CARD_ID, onBoardDragZ, tearOffHeight, trailVelocity } from './drag'
 import type { BoardLayout, CardSlot } from './layout'
 import { useBoardRuntime } from './runtime'
-import { toLocal } from './space'
+import { hash01, toLocal } from './space'
 import { SKIN_SWITCH_MS, useView } from './viewStore'
 
 export type CardKind = 'slot' | 'drag' | 'parked' | 'leaving' | 'new'
@@ -58,6 +58,7 @@ export function useCardFrames<C>(
   const runtime = useBoardRuntime()
   const cache = useRef(new Map<ID, CardSlot<C>>())
   const lastKind = useRef(new Map<ID, CardKind>())
+  const lastColumn = useRef(new Map<ID, ID>())
   const contentKey = useRef('')
   const lastLayout = useRef<BoardLayout<C> | null>(null)
   const target: AnimTarget = { x: 0, y: 0, z: 0, w: 0, h: 0, rot: 0, scale: 1, curl: 0 }
@@ -68,7 +69,8 @@ export function useCardFrames<C>(
     const { drag, skinSwitch, detailCardId, leaving } = view
     const hoverCards = runtime.hoverCards
     const free = usePlacements.getState().freeCards
-    const cards = useBoardStore.getState().doc.cards
+    const { cards, board } = useBoardStore.getState().doc
+    const doneColumnId = board.columnIds[board.columnIds.length - 1]
     const reduced = useSettings.getState().reducedMotion
     const { animator } = runtime
     const [W, H] = layout.size
@@ -123,15 +125,24 @@ export function useCardFrames<C>(
       if (kind === 'slot') {
         const [cx, cy] = toLocal(r.x + r.w / 2, r.y + r.h / 2, [W, H])
         const pressed = drag.phase === 'pressed' && drag.cardId === id
+        // A pinch or grip picks the card up at once; a ray, poke or click presses it in.
+        const picked = pressed && drag.pointerKind === 'grab'
         target.x = cx
         target.y = cy
-        target.z = slot.z + (hovered ? 0.003 * liftScale : 0)
+        target.z = slot.z + (picked ? motion.liftHeight * liftScale * 0.6 : hovered ? 0.003 * liftScale : 0)
         target.w = r.w
         target.h = r.h
         target.rot = slot.rotation
-        target.scale = pressed ? 0.985 : hovered ? 1.015 : 1
-        target.curl = hovered && motion.peel ? 0.12 : 0
-        lift = hovered ? 0.25 : 0
+        target.scale = picked ? motion.dragScale : pressed ? 0.985 : hovered ? 1.015 : 1
+        target.curl = (hovered || picked) && motion.peel ? (picked ? 0.5 : 0.12) : 0
+        lift = picked ? 0.7 : hovered ? 0.25 : 0
+        if (motion.peel && !reduced && !hovered && !pressed) {
+          // Paper breathes a little in the room's air: a slow, per-note sway and edge lift.
+          const ph = hash01(id, 7) * Math.PI * 2
+          const t = now * 0.001
+          target.rot += Math.sin(t * 0.9 + ph) * 0.006
+          target.curl = 0.02 + 0.02 * (0.5 + 0.5 * Math.sin(t * 1.3 + ph * 1.7))
+        }
         clipMax = H / 2 - slot.clip[0]
         clipMin = H / 2 - slot.clip[1]
       } else if (kind === 'drag' || kind === 'new') {
@@ -141,7 +152,7 @@ export function useCardFrames<C>(
         const free3d = drag.phase === 'dragFree'
         target.x = cx
         target.y = cy
-        target.z = free3d ? p.z : motion.liftHeight * liftScale
+        target.z = free3d ? p.z : onBoardDragZ(drag.pointerKind, p.z, motion.liftHeight * liftScale, tearOffHeight(drag))
         target.w = size[0]
         target.h = size[1]
         const tilt = Math.max(-0.3, Math.min(0.3, -velocity[0] * motion.dragTilt))
@@ -179,8 +190,20 @@ export function useCardFrames<C>(
       if (stepping) {
         const prev = lastKind.current.get(id)
         animator.step(a, target, motion.spring, dt, reduced, now)
-        if (prev && prev !== 'slot' && prev !== 'leaving' && kind === 'slot' && motion.squash && !reduced) {
+        const landed = !!prev && prev !== 'slot' && prev !== 'leaving' && kind === 'slot'
+        if (landed && motion.squash && !reduced) {
           animator.kick(id, 'scale', -1.6)
+        }
+        // Effects on state changes (runtime.fx is a no-op under reduced motion).
+        const fx = runtime.fx
+        if (landed) fx.land(target.x, target.y, r.w, motion.peel ? '#6b7280' : '#4f8cff')
+        else if (prev === 'slot' && kind === 'drag') fx.lift(a.x, a.y, r.w, motion.peel ? '#9aa0a6' : '#4f8cff')
+        else if (kind === 'new' && prev !== 'new') fx.spawn(target.x, target.y, target.w)
+        else if (kind === 'leaving' && prev !== 'leaving') fx.archive(target.x, target.y, r.w)
+        if (kind === 'slot') {
+          const was = lastColumn.current.get(id)
+          if (was && was !== slot.columnId && slot.columnId === doneColumnId && !skinSwitch) fx.celebrate(target.x, target.y, r.w)
+          lastColumn.current.set(id, slot.columnId)
         }
         lastKind.current.set(id, kind)
       }

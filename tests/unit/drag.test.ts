@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dragReducer, IDLE, MAX_TAP_SLOP, pickColumn, TAP_MAX_DIST, tapSlop, type DragContext, type DragEvent, type DragState, NEW_CARD_ID } from '../../src/board/drag'
+import { dragReducer, IDLE, MAX_TAP_SLOP, onBoardDragZ, pickColumn, TAP_MAX_DIST, TEAR_OFF_DIST, tapSlop, tearOffHeight, type DragContext, type DragEvent, type DragState, NEW_CARD_ID } from '../../src/board/drag'
 import { projectsLayout, projectsInsertionIndex } from '../../src/skins/projects/layout'
 import { approximateMeasure } from '../../src/board/text'
 import { createDemoBoard } from '../../src/data/seed'
@@ -25,7 +25,7 @@ function run(events: DragEvent[], start: DragState = IDLE) {
   return { state, effects }
 }
 
-const down = (kind: 'ray' | 'grab' = 'ray', t = 0, source: 'board' | 'pad' | 'free' = 'board', id: string | null = card.id, z = 0, slop?: number): DragEvent => ({
+const down = (kind: 'ray' | 'grab' | 'touch' = 'ray', t = 0, source: 'board' | 'pad' | 'free' = 'board', id: string | null = card.id, z = 0, slop?: number): DragEvent => ({
   type: 'down',
   pointerId: 1,
   pointerKind: kind,
@@ -126,11 +126,25 @@ describe('dragReducer', () => {
   })
 
   it('measures tear-off from where a grab picked the card up', () => {
-    // Grabbed from 7 cm away (the grab sphere's reach): pulling to 15 cm is only 8 cm of pull.
+    // Grabbed from 7 cm away (a controller grip's reach): pulling to 15 cm is only 8 cm of pull.
     let { state } = run([down('grab', 0, 'board', card.id, 0.07), move(cu, cv + 0.02, 0.08, 20), move(cu, cv, 0.15, 60)])
     expect(state.phase).toBe('dragOnBoard')
     state = dragReducer(state, move(cu, cv, 0.2, 80), ctx).state
     expect(state.phase).toBe('dragFree')
+  })
+
+  it('a poke tap opens details although the fingertip lifts off the surface to release', () => {
+    const { effects } = run([down('touch', 0, 'board', card.id, 0.004), move(cu + 0.002, cv, 0.012, 40), up(cu + 0.003, cv, 0.02, 150)])
+    expect(effects).toContainEqual({ type: 'detail', cardId: card.id })
+  })
+
+  it('a grabbed card follows the hand up to the height it tears off at', () => {
+    const lift = 0.015
+    const grabbedFar = { source: 'board' as const, start: { u: cu, v: cv, z: 0.05, t: 0 } }
+    expect(tearOffHeight(grabbedFar)).toBeCloseTo(0.05 + TEAR_OFF_DIST)
+    expect(tearOffHeight({ source: 'free', start: { u: cu, v: cv, z: 0.3, t: 0 } })).toBe(TEAR_OFF_DIST)
+    // Hand at 15 cm, grabbed from 5 cm: still on the board, and the card stays in the hand.
+    expect(onBoardDragZ('grab', 0.15, lift, tearOffHeight(grabbedFar))).toBeCloseTo(0.15)
   })
 
   it('a tap on a parked card opens its details instead of re-parking it', () => {

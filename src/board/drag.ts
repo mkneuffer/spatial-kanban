@@ -143,6 +143,39 @@ export function tapSlop(kind: PointerKind, distance: number): number {
 }
 
 /**
+ * How far off the board a card dragged along it sits (board-local z, m).
+ * - grab (pinch, grip): the card stays in the hand, rising with it until it tears off,
+ *   so a direct grab never leaves the card behind on the board.
+ * - touch (poke): the card stays just under the fingertip instead of floating in front of it.
+ * - ray / mouse / screen: the skin's fixed lift.
+ */
+export function onBoardDragZ(kind: PointerKind, pointerZ: number, lift: number, tearAt = TEAR_OFF_DIST): number {
+  if (kind === 'grab') return Math.min(tearAt, Math.max(lift, pointerZ))
+  if (kind === 'touch') return Math.min(lift, 0.004)
+  return lift
+}
+
+/**
+ * Pointer height (board-local z) at which a card dragged along the board tears off.
+ * Measured from where it was grabbed: a grab sphere picks cards up from several
+ * centimetres away (5 cm pinch, 7 cm controller grip), which must not count toward
+ * the pull. A card that came off the board (parked) measures from the board itself.
+ */
+export function tearOffHeight(state: Pick<DragState, 'source' | 'start'>): number {
+  const base = state.source === 'board' && state.start ? Math.max(0, state.start.z) : 0
+  return base + TEAR_OFF_DIST
+}
+
+/**
+ * Tap distance. A poke presses a few millimetres from the surface and releases
+ * up to 2 cm off it, so its depth change is part of every tap: measure in the
+ * board plane only. Other pointers measure in 3D.
+ */
+function tapDistance(kind: PointerKind, a: DragPoint, b: DragPoint): number {
+  return kind === 'touch' ? Math.hypot(a.u - b.u, a.v - b.v) : dist2(a, b)
+}
+
+/**
  * Target column with hysteresis: keep the previous column until the pointer is
  * more than `hysteresis` outside it, so the target doesn't flicker at edges.
  */
@@ -232,15 +265,12 @@ export function dragReducer<C>(state: DragState, event: DragEvent, ctx: DragCont
   if (event.type === 'move') {
     let next: DragState = { ...state, current: p, trail }
     if (state.phase === 'pressed') {
-      if (dist2(p, state.start!) <= state.slop) return { state: next, effects }
+      if (tapDistance(state.pointerKind, p, state.start!) <= state.slop) return { state: next, effects }
       next = { ...next, phase: state.source === 'free' ? 'dragFree' : 'dragOnBoard' }
       effects.push({ type: 'sound', name: 'pick' }, { type: 'haptic', strength: 'tick' })
     }
     const tearable = canTearOff(state.pointerKind) && state.source !== 'pad'
-    // Measured from where the card was grabbed: a grab sphere can pick a card up
-    // from several centimetres away, which must not count toward the pull.
-    const pulled = p.z - (state.source === 'board' ? Math.max(0, state.start!.z) : 0)
-    if (next.phase === 'dragOnBoard' && tearable && pulled > TEAR_OFF_DIST) {
+    if (next.phase === 'dragOnBoard' && tearable && p.z > tearOffHeight(state)) {
       next = { ...next, phase: 'dragFree', targetColumnId: null, targetIndex: null, overBin: false }
       effects.push({ type: 'sound', name: 'tear' }, { type: 'haptic', strength: 'firm' })
       return { state: next, effects }
@@ -270,7 +300,7 @@ export function dragReducer<C>(state: DragState, event: DragEvent, ctx: DragCont
   const done = (fx: DragEffect[]): DragResult => ({ state: IDLE, effects: fx })
 
   if (state.phase === 'pressed') {
-    const quick = p.t - state.start!.t <= TAP_MAX_MS && dist2(p, state.start!) <= state.slop
+    const quick = p.t - state.start!.t <= TAP_MAX_MS && tapDistance(state.pointerKind, p, state.start!) <= state.slop
     if (!quick) return done([{ type: 'cancel' }])
     if (state.source === 'pad') return done([{ type: 'padTap' }])
     return done(cardId ? [{ type: 'detail', cardId }] : [{ type: 'cancel' }])

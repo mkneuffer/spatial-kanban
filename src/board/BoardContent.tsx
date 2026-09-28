@@ -8,6 +8,7 @@ import { usePlacements } from '../data/placements'
 import { getSkin } from '../skins/registry'
 import type { AnySkin } from '../skins/types'
 import { BoardInteraction } from './BoardInteraction'
+import { BoardEffects } from './fx'
 import type { BoardLayout, DragGap, LayoutOptions } from './layout'
 import { BoardRuntimeContext, createRuntime, type BoardRuntime } from './runtime'
 import { canvasMeasure } from './text'
@@ -80,6 +81,7 @@ export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Pro
       setMix(1)
       return
     }
+    runtime.fx.sweep(runtime.size[0], runtime.size[1], '#f5a524')
     let raf = 0
     const tick = () => {
       const t = Math.min(1, (performance.now() - skinSwitch.start) / SKIN_SWITCH_MS)
@@ -95,10 +97,22 @@ export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Pro
   const session = useXR((s) => s.session)
   const inputs = useXR((s) => s.inputSourceStates)
   const tmp = useMemo(() => ({ board: new Vector3(), cam: new Vector3() }), [])
+  const appear = useRef<{ group: Group | null; start: number }>({ group: null, start: -1 })
   useFrame((state, dt) => {
     const root = localRoot.current
     if (!root) return
     runtime.root = root
+    // Entrance: the board settles in with a soft overshoot (skipped under reduced motion).
+    const ap = appear.current
+    if (ap.group && ap.start !== Infinity) {
+      if (ap.start < 0) ap.start = performance.now()
+      const t = Math.min(1, (performance.now() - ap.start) / 650)
+      const reduced = useSettings.getState().reducedMotion
+      const e = reduced || t >= 1 ? 1 : easeOutBack(t)
+      ap.group.scale.setScalar(0.9 + 0.1 * e)
+      ap.group.position.z = (1 - e) * 0.03
+      if (t >= 1 || reduced) ap.start = Infinity
+    }
     root.getWorldPosition(tmp.board)
     state.camera.getWorldPosition(tmp.cam)
     const far = tmp.board.distanceTo(tmp.cam) > FAR_DISTANCE * Math.max(0.5, view.k)
@@ -132,33 +146,36 @@ export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Pro
 
   return (
     <BoardRuntimeContext.Provider value={runtime}>
-      <group
-        ref={(g) => {
-          localRoot.current = g
-          if (rootRef) rootRef.current = g
-        }}
-        name="board-content"
-      >
-        {switching && FromSurface && FromCards && (
-          <group key={`from-${fromSkin!.id}`}>
-            <FromSurface layout={fromLayouts!.view} dark={dark} highContrast={highContrast} opacity={opacity * (1 - mix)} targetColumnId={null} overBin={false} padActive={false} />
-            <FromCards layout={fromLayouts!.view} dark={dark} highContrast={highContrast} role="from" />
+      <group ref={(g) => void (appear.current.group = g)} name="board-appear">
+        <group
+          ref={(g) => {
+            localRoot.current = g
+            if (rootRef) rootRef.current = g
+          }}
+          name="board-content"
+        >
+          {switching && FromSurface && FromCards && (
+            <group key={`from-${fromSkin!.id}`}>
+              <FromSurface layout={fromLayouts!.view} dark={dark} highContrast={highContrast} opacity={opacity * (1 - mix)} targetColumnId={null} overBin={false} padActive={false} />
+              <FromCards layout={fromLayouts!.view} dark={dark} highContrast={highContrast} role="from" />
+            </group>
+          )}
+          <group key={`skin-${skin.id}`}>
+            <Surface
+              layout={view}
+              dark={dark}
+              highContrast={highContrast}
+              opacity={opacity * (switching ? mix : 1)}
+              targetColumnId={targetColumnId}
+              overBin={overBin}
+              padActive={padActive}
+            />
+            <Cards layout={view} dark={dark} highContrast={highContrast} role={switching ? 'to' : 'only'} />
           </group>
-        )}
-        <group key={`skin-${skin.id}`}>
-          <Surface
-            layout={view}
-            dark={dark}
-            highContrast={highContrast}
-            opacity={opacity * (switching ? mix : 1)}
-            targetColumnId={targetColumnId}
-            overBin={overBin}
-            padActive={padActive}
-          />
-          <Cards layout={view} dark={dark} highContrast={highContrast} role={switching ? 'to' : 'only'} />
+          <BoardInteraction layout={view} skin={skin} />
+          <BoardEffects />
+          {children?.(view)}
         </group>
-        <BoardInteraction layout={view} skin={skin} />
-        {children?.(view)}
       </group>
     </BoardRuntimeContext.Provider>
   )
@@ -167,6 +184,11 @@ export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Pro
 function hoveredColumnOf(hover: BoardRuntime['hoverColumns'], source: XRInputSource): string | null {
   for (const h of hover.values()) if (h.source === source) return h.columnId
   return null
+}
+
+function easeOutBack(t: number) {
+  const c = 1.4
+  return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2)
 }
 
 /** Switch skins with the morph animation (PLAN §7.5). */

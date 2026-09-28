@@ -12,11 +12,13 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 
 ## Highlights
 
-- **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
+- **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. Desk and floating boards can be tilted: drag the hinge on the top edge, or use the menu. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
 - **The board stays put.** On Meta Quest the board is saved with a persistent anchor and comes back where you left it. If the room changed, you get "Board not found here — place it again?", with the size and skin kept.
 - **Direct manipulation.** Rays, pinch/grab, poke, touch and mouse all go through one pointer model. Pick up, drag, drop, tear a card off the board (pull it more than 12 cm away), park it in the room, throw it downward to archive it, or drop it on the bin. Create cards by pulling a blank one from the pad.
-- **Two skins, switched live.** *Projects* is a clean, GitHub-style board. *Whiteboard* is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. Cards flip in a wave while the layout morphs between skins.
-- **Text input in XR.** A 3D keyboard plus voice dictation (Web Speech API) where it's available.
+- **Two skins, switched live.** *Whiteboard* (the default) is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. *Projects* is a clean, GitHub-style board. Cards flip in a wave while the layout morphs between skins.
+- **Text input in XR.** The headset's system keyboard where the browser offers one (Meta Quest), otherwise a 3D keyboard, plus voice dictation (Web Speech API) where it's available.
+- **Effects.** Landing ripples, peel dust, confetti when a card reaches the last column, a puff at the bin, and a scan sweep when the board appears or changes skin. All of it switches off with reduced motion.
+- **Readable.** Text colors from column and label colors are checked against their background (WCAG contrast), so the whiteboard never gets pale or white ink.
 - **Editable board.** Rename the board and give it a description, and add, rename, recolor, reorder or delete columns and labels (each label gets a color and an icon) from **⋯ → Edit board, columns & labels**. Every edit can be undone.
 - **Due dates and deadlines.** A card can have a planned due date, a hard deadline, or both. They show on the card and turn red once they've passed, and the drawer warns you when the due date falls after the deadline.
 - **Local-first.** Everything is saved to IndexedDB on this device, with undo/redo and JSON import/export.
@@ -39,7 +41,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 
 | Action | Hands / controllers | Phone AR | Desktop 3D | 2D board |
 |---|---|---|---|---|
-| Pick up / move | Pinch or trigger on a card (ray), or grab nearby (grip) | Touch drag | Mouse drag | Drag, or Space then arrow keys |
+| Pick up / move | Near: pinch the card, or poke and slide it with a fingertip. Far: pinch or trigger along the ray. Controllers: squeeze near a card | Touch drag | Mouse drag | Drag, or Space then arrow keys |
 | Card details | Quick tap (< 300 ms, < 1 cm up close; far rays allow a little more). Tap it again, or tap empty board, to close | Tap | Click | Click / Enter |
 | Tear off, park in the room | Grab and pull > 12 cm further from the board than where you grabbed it | – | – | – |
 | Return a parked card | Drag it back onto the board (a ray moves it at its own depth until it's over the board) | – | Details → Return to board | Details → Return to board |
@@ -48,6 +50,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Scroll a long column (Projects) | Thumbstick while hovering | Swipe | Wheel | Scroll |
 | Reorder columns | Drag a column header sideways | Same | Same | Column menu |
 | Move / resize the board | Drag the bar under the board / the corner | Same | – | – |
+| Tilt the board (desk, float) | Drag the hinge above the top edge, or Menu → Tilt | Same | – | – |
 | Menu (skins, size, settings, exit) | "Menu" on the board | HUD buttons | Top bar | Top bar |
 | Edit board, columns, labels | – | – | ⋯ → Edit board | ⋯ → Edit board |
 | Due date / deadline | Shown in card details | Card details | Card details | Card details |
@@ -125,6 +128,18 @@ A skin never creates one mesh per card. Per frame, a shared driver (`board/cardF
 
 Invisible per-card hit proxies take pointer events, so hands (sphere intersection), pokes and rays all work the same way. Proxies are clipped to their column's scroll viewport and switched off through pointer-events (three's `visible` does not stop raycasts). The board surface sits below everything else in pointer-events order, so a grab sphere that reaches both a card and the board picks the card. Hover is tracked per pointer, and each controller's thumbstick scrolls the column its own ray is over.
 
+### Hands
+
+Tracked hands use the ProtoGen **Meta Dark v6** look (`xr/hands/metaDarkV6.ts`, ported from the ProtoGen WebXR Template's `xr-hands.js`): a translucent near-black toon body that fades out toward the wrist, with a white inverted-hull outline. The generic-hand skeletons are self-hosted in `public/webxr-profiles/generic-hand/`, so hands also load offline.
+
+`xr/hands/KanbanHand.tsx` replaces the pmndrs default hand with three pointers, and the nearest hit wins:
+
+- **Pinch grab** sits at the midpoint between the thumb and index tips, where the fingers actually close (5 cm reach). A pinched card lifts at once and stays in the fingers: it rises with the hand until it tears off at 12 cm.
+- **Poke** sits at the index tip. It presses only when the fingertip reaches the surface from the front, and releases after a 2 cm lift, so a finger sliding along the board doesn't drop the card. It turns off while a pinch is forming (thumb near index), so reaching in to pinch never pokes by accident. In the pmndrs default, grab and poke shared the fingertip and grab won every tie, so poke never fired.
+- **Ray** handles everything beyond about 10 cm.
+
+Thresholds live in `xr/hands/nearField.ts` and are unit tested. Controllers keep their models; a squeeze-grab holds the card in the hand the same way a pinch does.
+
 ### Project layout
 
 ```
@@ -134,7 +149,7 @@ src/
   board/        space math, layout types, drag reducer, animator, card driver, interaction
   skins/        skin interface, registry, projects/, whiteboard/
   render/       chips, paper, shadows, text batches, marker strokes, fonts
-  xr/           session store, capabilities, anchors, surfaces, placement/, handles, phone HUD, emulator
+  xr/           session store, capabilities, anchors, surfaces, placement/, hands/, handles, phone HUD, emulator
   ui/           flat/ (2D board, drawer, dialogs), xr/ (3D panels, keyboard), toasts
   fx/           procedural WebAudio sounds, haptics
 tests/unit/     ordering, store, layout (both skins), drag, snapping, persistence

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { ScalePreset } from './model'
 
 export interface Settings {
+  /** Bumped when a default changes so saved settings can pick up the new default once. */
+  version: number
   skinId: string
   reducedMotion: boolean
   sound: boolean
@@ -19,8 +21,12 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+/** v2: the whiteboard became the default skin. */
+export const SETTINGS_VERSION = 2
+
 export const DEFAULT_SETTINGS: Settings = {
-  skinId: 'projects',
+  version: SETTINGS_VERSION,
+  skinId: 'whiteboard',
   reducedMotion: typeof window !== 'undefined' ? prefersReducedMotion() : false,
   sound: true,
   haptics: true,
@@ -37,10 +43,18 @@ interface SettingsState extends Settings {
 export const useSettings = create<SettingsState>()((set) => ({
   ...DEFAULT_SETTINGS,
   set: (changes) => set(changes),
-  hydrate: (settings) => set(settings),
+  hydrate: (settings) => set(migrateSettings(settings)),
 }))
 
+/** Upgrade settings saved by an older version. Choices made after an upgrade are kept. */
+export function migrateSettings(saved: Partial<Settings>): Partial<Settings> {
+  const out = { ...saved }
+  if ((out.version ?? 1) < 2) out.skinId = DEFAULT_SETTINGS.skinId
+  out.version = SETTINGS_VERSION
+  return out
+}
+
 export function pickSettings(s: Settings): Settings {
-  const { skinId, reducedMotion, sound, haptics, highContrast, leftHanded, scalePreset } = s
-  return { skinId, reducedMotion, sound, haptics, highContrast, leftHanded, scalePreset }
+  const { version, skinId, reducedMotion, sound, haptics, highContrast, leftHanded, scalePreset } = s
+  return { version, skinId, reducedMotion, sound, haptics, highContrast, leftHanded, scalePreset }
 }

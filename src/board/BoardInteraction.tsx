@@ -14,6 +14,7 @@ import { clipSpan, rayToPlaneZ, toBoard, toLocal, type Rect } from './space'
 import { useView } from './viewStore'
 import { playSound } from '../fx/audio'
 import { pulse } from '../fx/haptics'
+import { onXRBackground } from '../xr/lifecycle'
 
 /** The subset of pmndrs/pointer-events' PointerEvent this layer relies on. */
 export interface XPointerEvent {
@@ -191,6 +192,18 @@ export function BoardInteraction({ layout, skin }: Props) {
       runtime.hoverColumns.clear()
       if (controls) controls.enabled = true
     },
+    [runtime, controls],
+  )
+
+  // The system menu (or headset sleep) removes input sources without leave or up events.
+  useEffect(
+    () =>
+      onXRBackground(() => {
+        runtime.hoverCards.clear()
+        runtime.hoverColumns.clear()
+        surfacePress.current = null
+        if (controls) controls.enabled = true
+      }),
     [runtime, controls],
   )
 
