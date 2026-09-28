@@ -12,11 +12,15 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 
 ## Highlights
 
-- **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
+- **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. Desk and floating boards can be tilted: drag the hinge on the top edge, or use the menu. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
 - **The board stays put.** On Meta Quest the board is saved with a persistent anchor and comes back where you left it. If the room changed, you get "Board not found here — place it again?", with the size and skin kept.
 - **Direct manipulation.** Rays, pinch/grab, poke, touch and mouse all go through one pointer model. Pick up, drag, drop, tear a card off the board (pull it more than 12 cm away), park it in the room, throw it downward to archive it, or drop it on the bin. Create cards by pulling a blank one from the pad.
-- **Two skins, switched live.** *Projects* is a clean, GitHub-style board. *Whiteboard* is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. Cards flip in a wave while the layout morphs between skins.
-- **Text input in XR.** A 3D keyboard plus voice dictation (Web Speech API) where it's available.
+- **Two skins, switched live.** *Whiteboard* (the default) is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. *Projects* is a clean, GitHub-style board. Cards flip in a wave while the layout morphs between skins.
+- **Text input in XR.** The headset's system keyboard where the browser offers one (Meta Quest), otherwise a 3D keyboard, plus voice dictation (Web Speech API) where it's available.
+- **Effects.** Landing ripples, peel dust, confetti when a card reaches the last column, a puff at the bin, and a scan sweep when the board appears or changes skin. All of it switches off with reduced motion.
+- **Readable.** Text colors from column and label colors are checked against their background (WCAG contrast), so the whiteboard never gets pale or white ink.
+- **Editable board.** Rename the board and give it a description, and add, rename, recolor, reorder or delete columns and labels (each label gets a color and an icon) from **⋯ → Edit board, columns & labels**. Every edit can be undone.
+- **Due dates and deadlines.** A card can have a planned due date, a hard deadline, or both. They show on the card and turn red once they've passed, and the drawer warns you when the due date falls after the deadline.
 - **Local-first.** Everything is saved to IndexedDB on this device, with undo/redo, JSON import/export and several boards side by side.
 - **Optional two-way sync** with **GitHub Projects, Trello, Linear and Jira**, through a small Cloudflare Worker. Move a card on your wall and it moves in the tool, and changes made there show up on the board. Without the Worker the app is exactly as local-only as before.
 - **Accessible.** The 2D board is fully keyboard- and screen-reader-operable. Labels always pair color with an icon, and there are high-contrast, reduced-motion and left-hand modes.
@@ -38,7 +42,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 
 | Action | Hands / controllers | Phone AR | Desktop 3D | 2D board |
 |---|---|---|---|---|
-| Pick up / move | Pinch or trigger on a card (ray), or grab nearby (grip) | Touch drag | Mouse drag | Drag, or Space then arrow keys |
+| Pick up / move | Near: pinch the card, or poke and slide it with a fingertip. Far: pinch or trigger along the ray. Controllers: squeeze near a card | Touch drag | Mouse drag | Drag, or Space then arrow keys |
 | Card details | Quick tap (< 300 ms, < 1 cm) | Tap | Click | Click / Enter |
 | Tear off, park in the room | Grab and pull > 12 cm off the board | – | – | – |
 | Return a parked card | Drag it back onto the board | – | Details → Return to board | Details → Return to board |
@@ -47,7 +51,10 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Scroll a long column (Projects) | Thumbstick while hovering | Swipe | Wheel | Scroll |
 | Reorder columns | Drag a column header sideways | Same | Same | Column menu |
 | Move / resize the board | Drag the bar under the board / the corner | Same | – | – |
+| Tilt the board (desk, float) | Drag the hinge above the top edge, or Menu → Tilt | Same | – | – |
 | Menu (skins, size, settings, exit) | "Menu" on the board | HUD buttons | Top bar | Top bar |
+| Edit board, columns, labels | – | – | ⋯ → Edit board | ⋯ → Edit board |
+| Due date / deadline | Shown in card details | Card details | Card details | Card details |
 
 Press **?** in the 2D or 3D view for in-app help. Undo and redo are **⌘Z** and **⇧⌘Z**.
 
@@ -162,6 +169,18 @@ A skin never creates one mesh per card. Per frame, a shared driver (`board/cardF
 
 Invisible per-card hit proxies take pointer events, so hands (sphere intersection), pokes and rays all work the same way.
 
+### Hands
+
+Tracked hands use the ProtoGen **Meta Dark v6** look (`xr/hands/metaDarkV6.ts`, ported from the ProtoGen WebXR Template's `xr-hands.js`): a translucent near-black toon body that fades out toward the wrist, with a white inverted-hull outline. The generic-hand skeletons are self-hosted in `public/webxr-profiles/generic-hand/`, so hands also load offline.
+
+`xr/hands/KanbanHand.tsx` replaces the pmndrs default hand with three pointers, and the nearest hit wins:
+
+- **Pinch grab** sits at the midpoint between the thumb and index tips, where the fingers actually close (5 cm reach). A pinched card lifts at once and stays in the fingers: it rises with the hand until it tears off at 12 cm.
+- **Poke** sits at the index tip. It presses only when the fingertip reaches the surface from the front, and releases after a 2 cm lift, so a finger sliding along the board doesn't drop the card. It turns off while a pinch is forming (thumb near index), so reaching in to pinch never pokes by accident. In the pmndrs default, grab and poke shared the fingertip and grab won every tie, so poke never fired.
+- **Ray** handles everything beyond about 10 cm.
+
+Thresholds live in `xr/hands/nearField.ts` and are unit tested. Controllers keep their models; a squeeze-grab holds the card in the hand the same way a pinch does.
+
 ### Project layout
 
 ```
@@ -171,7 +190,7 @@ src/
   board/        space math, layout types, drag reducer, animator, card driver, interaction
   skins/        skin interface, registry, projects/, whiteboard/
   render/       chips, paper, shadows, text batches, marker strokes, fonts
-  xr/           session store, capabilities, anchors, surfaces, placement/, handles, phone HUD, emulator
+  xr/           session store, capabilities, anchors, surfaces, placement/, hands/, handles, phone HUD, emulator
   ui/           flat/ (2D board, drawer, dialogs), xr/ (3D panels, keyboard), toasts
   fx/           procedural WebAudio sounds, haptics
   integrations/ wire protocol, three-way sync planner, sync engine, API client
@@ -221,8 +240,8 @@ Not started: live multi-user Yjs sync with presence, share links, and Phase 4.
 
 ## Testing
 
-- `npm test` runs 115 tests:
-  - Unit tests: fractional ordering, store actions and undo/redo, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, drag, tear-off hysteresis, throw to archive, pad, bin), snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
+- `npm test` runs 141 tests:
+  - Unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, drag, tear-off hysteresis, throw to archive, pad, bin), snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
   - The sync planner: pulls, pushes, conflicts, minimal reorders, refusals, deleted cards.
   - The sync engine: debouncing, in-flight creates, refusals, stale reads.
   - The Worker, called through its `fetch` handler with D1 backed by `node:sqlite` and provider APIs mocked: OAuth round trips (state checks, Trello's fragment flow, second device), encrypted token storage, token refresh with rotation, project listing and mapping, op application, idempotent creates, validation, cross-origin refusal. Plus each provider's mapping (Jira ADF ↔ text, Linear state order, Trello positions).

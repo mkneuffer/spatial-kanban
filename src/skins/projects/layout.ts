@@ -11,6 +11,7 @@ import {
   type LayoutInput,
 } from '../../board/layout'
 import { ellipsize, wrapText, type TextMeasure } from '../../board/text'
+import { cardDates } from '../../data/dates'
 
 /** Card-local content layout, measured from the card's top-left corner (m). */
 export interface ProjectsContent {
@@ -42,16 +43,16 @@ export function projectsMetrics(k: number) {
     colMargin: 0.01 * k,
     cardPad: 0.012 * k,
     cardGap: 0.01 * k,
-    refSize: 0.0112 * k,
-    titleSize: 0.0165 * k,
-    lineH: 0.0165 * k * 1.3,
-    pillH: 0.02 * k,
-    pillText: 0.0096 * k,
+    refSize: 0.012 * k,
+    titleSize: 0.0182 * k,
+    lineH: 0.0182 * k * 1.28,
+    pillH: 0.021 * k,
+    pillText: 0.0106 * k,
     pillPadX: 0.0075 * k,
     avatarD: 0.02 * k,
-    dueSize: 0.0102 * k,
-    headerSize: 0.0165 * k,
-    boardTitleSize: 0.026 * k,
+    dueSize: 0.0112 * k,
+    headerSize: 0.019 * k,
+    boardTitleSize: 0.028 * k,
     radius: 0.008 * k,
   }
 }
@@ -61,17 +62,6 @@ export type ProjectsMetrics = ReturnType<typeof projectsMetrics>
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/)
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-export function formatDue(date: string, today = new Date()): { text: string; overdue: boolean } {
-  const [y, m, d] = date.split('-').map(Number)
-  const due = new Date(y, (m ?? 1) - 1, d ?? 1)
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const days = Math.round((due.getTime() - start.getTime()) / 86_400_000)
-  const label = days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due ${MONTHS[due.getMonth()]} ${due.getDate()}`
-  return { text: label, overdue: days < 0 }
 }
 
 export function projectsCardContent(card: Card, doc: BoardDoc, width: number, M: ProjectsMetrics, measure: TextMeasure): { content: ProjectsContent; height: number } {
@@ -115,10 +105,11 @@ export function projectsCardContent(card: Card, doc: BoardDoc, width: number, M:
   }
 
   let due: ProjectsContent['due']
-  if (card.dueDate) {
-    const f = formatDue(card.dueDate)
+  const dates = cardDates(card)
+  if (dates.length) {
+    const text = ellipsize(dates.map((d) => d.text).join(' · '), innerW, measure, 'Inter', M.dueSize, 400)
     y += M.dueSize * 0.6
-    due = { text: f.text, overdue: f.overdue, x: M.cardPad, y, size: M.dueSize }
+    due = { text, overdue: dates.some((d) => d.overdue), x: M.cardPad, y, size: M.dueSize }
     y += M.dueSize * 1.3
   }
 

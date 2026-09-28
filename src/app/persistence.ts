@@ -1,6 +1,6 @@
 import { useBoardStore, onBoardPatches } from '../data/store'
 import { createDemoBoard } from '../data/seed'
-import { pickSettings, useSettings } from '../data/settings'
+import { DEFAULT_SETTINGS, pickSettings, useSettings } from '../data/settings'
 import { usePlacements } from '../data/placements'
 import type { BoardDoc } from '../data/model'
 import {
@@ -46,6 +46,11 @@ let flushAll: () => void = () => undefined
 let pendingKv: KVWrites = new Map()
 let scheduleDocSave: () => void = () => undefined
 
+/** Write pending changes immediately (before the app may be backgrounded or closed). */
+export function flushPersistence() {
+  flushAll()
+}
+
 /**
  * Local-first persistence (PLAN §14, phase 1): load from IndexedDB on boot,
  * then save each change (debounced) using the entities Immer's patches touched.
@@ -71,7 +76,8 @@ export async function bootPersistence(): Promise<void> {
       await saveDocFull(db, seeded)
       useBoardStore.getState().load(seeded)
     }
-    await hydratePlacements(db)
+    // Placements saved before the whiteboard became the default remember the old default, not a choice.
+    await hydratePlacements(db, (settings?.version ?? 1) < 2)
   } catch (err) {
     console.warn('[persistence] load failed — starting from the demo board', err)
     useBoardStore.setState({ ready: true })
@@ -118,11 +124,12 @@ export async function bootPersistence(): Promise<void> {
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushAll())
 }
 
-async function hydratePlacements(store: KanbanDB) {
+async function hydratePlacements(store: KanbanDB, legacySkinDefault = false) {
   const boardId = useBoardStore.getState().doc.board.id
   const deviceId = usePlacements.getState().deviceId
   const [placement, free] = await Promise.all([loadPlacement(store, boardId, deviceId), loadFreeCards(store, deviceId)])
-  usePlacements.getState().hydrate(placement, free)
+  const upgraded = placement && legacySkinDefault && placement.skinId === 'projects' ? { ...placement, skinId: DEFAULT_SETTINGS.skinId } : placement
+  usePlacements.getState().hydrate(upgraded, free)
 }
 
 // ——— multiple boards ———

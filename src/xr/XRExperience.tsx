@@ -32,6 +32,8 @@ import { PlacementController, type PlacementCandidate } from './placement/Placem
 import { floatPose } from './placement/snapping'
 import { BoardHandles } from './BoardHandles'
 import { XRPhoneHud } from './XRPhoneHud'
+import { openSystemKeyboard } from './systemKeyboard'
+import { canTilt, DEFAULT_TILT, tiltOf } from './tilt'
 import { VREnvironment } from './VREnvironment'
 
 const ONE = new Vector3(1, 1, 1)
@@ -134,7 +136,8 @@ export function XRExperience({ dark }: { dark: boolean }) {
   }
 
   const size: [number, number] = placement && placement.mode === placingMode ? placement.size : boardSizeFor(placingMode, scalePreset)
-  const tilt = placement?.mode === 'desk' ? (placement.tiltDeg ?? 15) : 15
+  // Keep the tilt the user chose last time they placed in this mode.
+  const tilt = placement?.mode === placingMode ? tiltOf(placement) : DEFAULT_TILT[placingMode]
 
   const onConfirm = (c: PlacementCandidate, frame: XRFrame | undefined, refSpace: XRReferenceSpace | undefined) => {
     const app = useXRApp.getState()
@@ -149,7 +152,7 @@ export function XRExperience({ dark }: { dark: boolean }) {
       ...base,
       mode: placingMode,
       size,
-      tiltDeg: placingMode === 'desk' ? tilt : undefined,
+      tiltDeg: canTilt(placingMode) ? tilt : undefined,
       skinId: settings.skinId,
       anchorHandle: undefined,
       localOffset: matrixToPose(board),
@@ -321,7 +324,14 @@ function AnchoredBoard({ dark }: { dark: boolean }) {
               <group position={[side * (W / 2 + 0.04), H / 2, 0.01]}>
                 <DistanceScaled base={Math.max(0.6, Math.min(1, 0.4 + 0.6 * layout.k))}>
                   <group position={[side * 0.2, -0.25, 0]}>
-                    <DetailPanel3D cardId={detailCardId} onEditTitle={() => useView.getState().set({ editCardId: detailCardId, editIsNew: false })} />
+                    <DetailPanel3D
+                      cardId={detailCardId}
+                      onEditTitle={() => {
+                        // Focus inside the click so the headset's system keyboard is allowed to open.
+                        openSystemKeyboard(useBoardStore.getState().doc.cards[detailCardId]?.title ?? '')
+                        useView.getState().set({ editCardId: detailCardId, editIsNew: false })
+                      }}
+                    />
                     {editCardId && <EditKeyboard cardId={editCardId} />}
                   </group>
                 </DistanceScaled>
@@ -354,9 +364,10 @@ function EditKeyboard({ cardId }: { cardId: string }) {
   if (!card) return null
   const close = () => useView.getState().set({ editCardId: null, editIsNew: false })
   return (
-    <group position={[0, -0.47, 0.02]} rotation={[-0.25, 0, 0]}>
+    <group position={[0, -0.265, 0.02]} rotation={[-0.25, 0, 0]}>
       <Keyboard3D
         key={cardId}
+        anchor="top"
         initial={isNew ? '' : card.title}
         title={isNew ? 'New card title' : 'Edit title'}
         onSubmit={(text) => {

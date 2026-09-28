@@ -589,6 +589,11 @@ textarea {
   font-size: 12px;
   color: var(--muted);
 }
+.card .footer .dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
 .card .footer .overdue {
   color: var(--danger);
   font-weight: 500;
@@ -615,8 +620,23 @@ textarea {
   font-weight: 500;
 }
 
-/* Whiteboard skin in 2D */
+/* Whiteboard skin in 2D. The board is always white, so it always uses light-theme ink —
+   never the dark theme's white text on the white board. */
 .skin-whiteboard .flat {
+  color-scheme: light;
+  --bg-elev: #ffffff;
+  --bg-lane: #eef1f4;
+  --bg-hover: rgba(35, 38, 43, 0.07);
+  --border: #c9ced5;
+  --border-strong: #9aa2ac;
+  --text: #1f2328;
+  --muted: #4a4f57;
+  --accent: #1f5fbf;
+  --accent-soft: #dbe8fb;
+  --warn: #8a5a00;
+  --warn-soft: #fff4c2;
+  --danger: #c62828;
+  --success: #2e7d32;
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(255, 255, 255, 0.9), transparent),
     linear-gradient(180deg, #fbfbf7, #f1f1ec);
@@ -792,7 +812,8 @@ textarea {
   flex-direction: column;
   gap: 6px;
 }
-.field > span {
+.field > span,
+.field > label {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
@@ -848,6 +869,29 @@ textarea {
   border-top: 1px solid var(--border);
 }
 
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+.date-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.date-input input {
+  flex: 1;
+  min-width: 0;
+}
+.field-hint {
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.field-hint.warn {
+  color: var(--warn);
+}
+
 /* ——— Dialog ——— */
 
 .dialog {
@@ -884,6 +928,81 @@ textarea {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+.board-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+.board-editor > .btn {
+  align-self: flex-start;
+}
+.board-editor h3 {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.board-editor p {
+  margin: 0;
+}
+.edit-list {
+  list-style: none;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.edit-row input:not([type='color']),
+.edit-row select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+.edit-row input:not([type='color']) {
+  flex: 1;
+  min-width: 0;
+}
+.edit-row .usage {
+  min-width: 56px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.color-input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+}
+.icon-select {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.icon-select svg {
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 480px) {
+  .edit-row {
+    flex-wrap: wrap;
+  }
+  .edit-row input:not([type='color']) {
+    flex-basis: calc(100% - 40px);
+  }
 }
 .archived-list {
   display: flex;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { cardRef, type Person } from '../../data/model'
 import { useBoardStore } from '../../data/store'
 import { cardsInColumn } from '../../data/ordering'
@@ -10,6 +10,7 @@ import { STICKY_COLORS } from '../../skins/whiteboard/palette'
 import { pillBg, pillText } from '../../skins/projects/palette'
 import { initials } from '../../skins/projects/layout'
 import { PROVIDER_NAMES } from '../../integrations/protocol'
+import { dueAfterDeadline } from '../../data/dates'
 import { toast } from '../toasts'
 import { Icon, LabelGlyph } from './icons'
 
@@ -191,15 +192,15 @@ export function CardDrawer({ dark }: { dark: boolean }) {
               ))}
             </div>
           </div>
-          <label className="field">
-            <span>Due date {managed}</span>
-            <input
-              type="date"
-              value={card.dueDate ?? ''}
-              readOnly={!!tool}
-              onChange={(e) => dispatch({ type: 'card/update', id: card.id, changes: { dueDate: e.target.value || undefined } })}
-            />
-          </label>
+          <div className="field-row">
+            <DateField label="Due date" note={managed} readOnly={!!tool} value={card.dueDate} onChange={(dueDate) => dispatch({ type: 'card/update', id: card.id, changes: { dueDate } })} />
+            <DateField label="Deadline" value={card.deadline} onChange={(deadline) => dispatch({ type: 'card/update', id: card.id, changes: { deadline } })} />
+          </div>
+          {dueAfterDeadline(card) && (
+            <p className="field-hint warn" role="status">
+              The due date is after the deadline.
+            </p>
+          )}
           <div className="field">
             <span>Sticky note color (whiteboard skin)</span>
             <div className="swatches">
@@ -247,5 +248,25 @@ export function CardDrawer({ dark }: { dark: boolean }) {
         </footer>
       </div>
     </>
+  )
+}
+
+/** A date input with a clear button; an empty value clears the date. */
+function DateField({ label, note, readOnly, value, onChange }: { label: string; note?: ReactNode; readOnly?: boolean; value?: string; onChange(value: string | undefined): void }) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label htmlFor={id}>
+        {label} {note}
+      </label>
+      <span className="date-input">
+        <input id={id} type="date" value={value ?? ''} readOnly={readOnly} onChange={(e) => onChange(e.target.value || undefined)} />
+        {value && !readOnly && (
+          <button type="button" className="btn ghost icon" aria-label={`Clear ${label.toLowerCase()}`} onClick={() => onChange(undefined)}>
+            <Icon name="close" />
+          </button>
+        )}
+      </span>
+    </div>
   )
 }
