@@ -192,11 +192,27 @@ export function BoardInteraction({ layout, skin }: Props) {
     }
   }
 
-  const hover = (id: ID | null) => () => {
+  // Hover is tracked per pointer. Each hand's pointers hand over within one commit
+  // (a ray leaving as the near-field grab or poke enters), so a bare "leave → clear"
+  // would wipe the highlight the direct pointer just set.
+  const hovers = useRef(new Map<number, ID>())
+  const syncHover = () => {
     const v = useView.getState()
     if (v.drag.phase !== 'idle') return
-    if (id) v.set({ hoverCardId: id })
-    else v.set({ hoverCardId: null })
+    let last: ID | null = null
+    for (const id of hovers.current.values()) last = id
+    if (v.hoverCardId !== last) v.set({ hoverCardId: last })
+  }
+  const hoverEnter = (id: ID) => (raw: unknown) => {
+    const { pointerId } = raw as XPointerEvent
+    hovers.current.delete(pointerId)
+    hovers.current.set(pointerId, id)
+    syncHover()
+  }
+  const hoverLeave = (id: ID) => (raw: unknown) => {
+    const { pointerId } = raw as XPointerEvent
+    if (hovers.current.get(pointerId) === id) hovers.current.delete(pointerId)
+    syncHover()
   }
 
   // ——— Column bodies: hover (thumbstick scroll target), wheel and swipe scrolling ———
@@ -325,8 +341,8 @@ export function BoardInteraction({ layout, skin }: Props) {
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onCancel}
-          onPointerEnter={hover(id)}
-          onPointerLeave={hover(null)}
+          onPointerEnter={hoverEnter(id)}
+          onPointerLeave={hoverLeave(id)}
         />
       ))}
       {layout.columns.map((col) => (

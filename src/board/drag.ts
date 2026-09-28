@@ -108,6 +108,19 @@ export function canTearOff(kind: PointerKind): boolean {
 }
 
 /**
+ * How far off the board a card dragged along it sits (board-local z, m).
+ * - grab (pinch, grip): the card stays in the hand, rising with it until it tears off,
+ *   so a direct grab never leaves the card behind on the board.
+ * - touch (poke): the card stays just under the fingertip instead of floating in front of it.
+ * - ray / mouse / screen: the skin's fixed lift.
+ */
+export function onBoardDragZ(kind: PointerKind, pointerZ: number, lift: number): number {
+  if (kind === 'grab') return Math.min(TEAR_OFF_DIST, Math.max(lift, pointerZ))
+  if (kind === 'touch') return Math.min(lift, 0.004)
+  return lift
+}
+
+/**
  * Target column with hysteresis: keep the previous column until the pointer is
  * more than `hysteresis` outside it, so the target doesn't flicker at edges.
  */
