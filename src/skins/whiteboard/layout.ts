@@ -37,12 +37,12 @@ export function whiteboardMetrics(k: number) {
     noteGap: 0.012 * k,
     maxNote: 0.125 * k,
     minNote2Up: 0.085 * k,
-    notePad: 0.011 * k,
-    textSize: 0.0215 * k,
-    minTextSize: 0.0155 * k,
-    headerSize: 0.03 * k,
-    boardTitleSize: 0.036 * k,
-    dotD: 0.013 * k,
+    notePad: 0.01 * k,
+    textSize: 0.025 * k,
+    minTextSize: 0.0185 * k,
+    headerSize: 0.034 * k,
+    boardTitleSize: 0.04 * k,
+    dotD: 0.015 * k,
     jitterPos: 0.004 * k,
     jitterRot: (3 * Math.PI) / 180,
   }
@@ -61,7 +61,7 @@ export function noteContent(card: Card, doc: BoardDoc, s: number, M: WhiteboardM
   for (;;) {
     const lineH = size * 1.08
     const maxLines = Math.max(1, Math.floor(availH / lineH))
-    lines = wrapText(card.title || '…', innerW, measure, 'Caveat', size, maxLines, 500)
+    lines = wrapText(card.title || '…', innerW, measure, 'Caveat', size, maxLines, 700)
     const complete = !lines[lines.length - 1]?.endsWith('…')
     if (complete || size <= M.minTextSize) break
     size = Math.max(M.minTextSize, size * 0.9)
@@ -80,7 +80,7 @@ export function noteContent(card: Card, doc: BoardDoc, s: number, M: WhiteboardM
         text: card.assignees.map((p) => initials(p.name)).join(' '),
         x: s - M.notePad,
         y: s - M.notePad - M.dotD / 2,
-        size: M.dotD * 1.2,
+        size: M.dotD * 1.45,
       }
     : undefined
   return { lines, textSize: size, lineH, textY: M.notePad, dots, who, padX: M.notePad }

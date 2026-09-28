@@ -9,35 +9,42 @@ import { useBoardRuntime } from '../board/runtime'
 import { toLocal } from '../board/space'
 import { pointerKindOf, pointerRay, type XPointerEvent } from '../board/BoardInteraction'
 import { playSound } from '../fx/audio'
-import { roundedRectGeometry, UI } from '../ui/xr/primitives'
+import { Label, roundedRectGeometry, UI } from '../ui/xr/primitives'
 import { anchorRuntime, matrixToPose, REANCHOR_DISTANCE } from './anchors'
 import { facing } from './placement/snapping'
+import { canTilt, tiltBoardMatrix, tiltOf, tiltTowardPointer } from './tilt'
+
+type HandleKind = 'move' | 'resize' | 'tilt'
 
 interface DragStart {
   pointerId: number
-  kind: 'move' | 'resize'
+  kind: HandleKind
   board: Matrix4
   inv: Matrix4
   plane: Plane
   hit: Vector3
   distance: number
   size: [number, number]
+  tilt: number
 }
 
 const ONE = new Vector3(1, 1, 1)
 
 /**
- * Move bar under the board and a corner resize handle (PLAN §6.2). Moving and
- * resizing only change the placement's local offset and size; large moves
+ * Move bar under the board, a corner resize handle and — for desk and floating
+ * boards — a tilt hinge on the top edge (PLAN §6.2). Moving, resizing and
+ * tilting only change the placement's local offset, size and tilt; large moves
  * trigger a re-anchor (PLAN §5.3).
  */
 export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emphasized: boolean }) {
   const runtime = useBoardRuntime()
   const camera = useThree((s) => s.camera)
   const start = useRef<DragStart | null>(null)
-  const [hover, setHover] = useState<'move' | 'resize' | null>(null)
-  const [active, setActive] = useState<'move' | 'resize' | null>(null)
-  const tmp = useMemo(() => ({ v: new Vector3(), q: new Quaternion(), s: new Vector3(), head: new Vector3(), m: new Matrix4() }), [])
+  const [hover, setHover] = useState<HandleKind | null>(null)
+  const [active, setActive] = useState<HandleKind | null>(null)
+  const mode = usePlacements((s) => s.placement?.mode ?? 'wall')
+  const tiltDeg = usePlacements((s) => (s.placement ? tiltOf(s.placement) : 0))
+  const tmp = useMemo(() => ({ v: new Vector3(), q: new Quaternion(), s: new Vector3(), head: new Vector3(), m: new Matrix4(), handle: new Vector3() }), [])
 
   const pointerWorld = (e: XPointerEvent, plane: Plane, distance: number): Vector3 => {
     const kind = pointerKindOf(e.pointerType)
@@ -51,7 +58,7 @@ export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emph
     return e.point.clone()
   }
 
-  const begin = (kind: 'move' | 'resize') => (raw: unknown) => {
+  const begin = (kind: HandleKind) => (raw: unknown) => {
     const e = raw as XPointerEvent
     const root = runtime.root
     if (!root) return
@@ -63,8 +70,12 @@ export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emph
     const center = new Vector3().setFromMatrixPosition(board)
     const plane = new Plane().setFromNormalAndCoplanarPoint(normal, center)
     const hit = pointerWorld(e, plane, 1)
-    const distance = pointerRay(e)?.origin.distanceTo(center) ?? 1
-    start.current = { pointerId: e.pointerId, kind, board, inv: board.clone().invert(), plane, hit, distance, size: [...layout.size] as [number, number] }
+    const ray = pointerRay(e)
+    // Tilting carries the handle at its own distance; moving carries the board by its center.
+    const distance = (kind === 'tilt' ? ray?.origin.distanceTo(e.point) : ray?.origin.distanceTo(center)) ?? 1
+    const placement = usePlacements.getState().placement
+    const tilt = placement ? tiltOf(placement) : 0
+    start.current = { pointerId: e.pointerId, kind, board, inv: board.clone().invert(), plane, hit, distance, size: [...layout.size] as [number, number], tilt }
     setActive(kind)
     playSound('clickSoft')
   }
@@ -79,14 +90,27 @@ export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emph
     s.board.decompose(tmp.v, tmp.q, tmp.s)
     let world: Matrix4
     let size = placement.size
-    if (s.kind === 'move') {
+    let tiltDeg = placement.tiltDeg
+    if (s.kind === 'tilt') {
+      const ray = pointerRay(e)
+      const kind = pointerKindOf(e.pointerType)
+      const direct = (kind === 'grab' || kind === 'touch') && e.pointerPosition
+      const next = direct
+        ? tiltTowardPointer(s.board, placement.mode, s.size, s.tilt, tmp.handle, e.pointerPosition!, null)
+        : ray
+          ? tiltTowardPointer(s.board, placement.mode, s.size, s.tilt, tmp.handle, ray.origin, ray.direction)
+          : s.tilt
+      if (Math.round(next) !== Math.round(tiltOf(placement))) playSound('tick')
+      tiltDeg = next
+      world = tiltBoardMatrix(s.board, placement.mode, s.size, next - s.tilt)
+    } else if (s.kind === 'move') {
       const ray = pointerRay(e)
       if (placement.mode === 'float' && pointerKindOf(e.pointerType) === 'ray' && ray) {
-        // Float: carry the board along the ray at its distance, turning to face the user.
+        // Float: carry the board along the ray at its distance, turning to face the user (keeping its tilt).
         const pos = ray.origin.addScaledVector(ray.direction, s.distance)
         camera.getWorldPosition(tmp.head)
         const pose = facing(pos, tmp.head)
-        world = new Matrix4().compose(pose.position, pose.quaternion, ONE)
+        world = tiltBoardMatrix(new Matrix4().compose(pose.position, pose.quaternion, ONE), 'float', s.size, s.tilt)
       } else {
         const delta = pw.clone().sub(s.hit)
         // Wall / desk: stay in the surface plane.
@@ -110,7 +134,7 @@ export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emph
     }
     const rt = anchorRuntime
     const offset = rt.anchor && rt.hasPose ? rt.pose.clone().invert().multiply(world) : world
-    usePlacements.getState().updatePlacement({ localOffset: matrixToPose(offset), size })
+    usePlacements.getState().updatePlacement({ localOffset: matrixToPose(offset), size, tiltDeg })
   }
 
   const end = (raw: unknown) => {
@@ -136,7 +160,13 @@ export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emph
   const [hx, hy] = toLocal(hr.x + hr.w / 2, hr.y + hr.h / 2, layout.size)
   const cr = layout.corner
   const [cx, cy] = toLocal(cr.x + cr.w / 2, cr.y + cr.h / 2, layout.size)
-  const handlers = (kind: 'move' | 'resize') => ({
+  // Tilt hinge: a grip centered above the top edge (the far edge on a desk).
+  const tiltable = canTilt(mode)
+  const tw = Math.max(0.09, Math.min(0.2, hr.w * 0.55))
+  const th = Math.max(0.018, hr.h)
+  const ty = layout.size[1] / 2 + Math.max(0.035, 0.045 * k)
+  tmp.handle.set(0, ty, 0.006)
+  const handlers = (kind: HandleKind) => ({
     onPointerDown: begin(kind),
     onPointerMove: move,
     onPointerUp: end,
@@ -144,12 +174,41 @@ export function BoardHandles({ layout, emphasized }: { layout: BoardLayout; emph
     onPointerEnter: () => setHover(kind),
     onPointerLeave: () => setHover((h) => (h === kind ? null : h)),
   })
-  const color = (kind: 'move' | 'resize') => (active === kind ? UI.accent : hover === kind || emphasized ? '#c9d1d9' : '#6e7681')
+  const color = (kind: HandleKind) => (active === kind ? UI.accent : hover === kind || emphasized ? '#c9d1d9' : '#6e7681')
   const opacity = emphasized || hover || active ? 0.95 : 0.55
   const mirror = layout.corner.x < 0
 
+  const tiltLive = active === 'tilt' || hover === 'tilt'
   return (
     <group>
+      {tiltable && (
+        <group position={[0, ty, 0.006]}>
+          <mesh geometry={roundedRectGeometry(tw, th, th / 2)} raycast={() => {}}>
+            <meshBasicMaterial color={color('tilt')} transparent opacity={opacity} />
+          </mesh>
+          {/* Up/down chevrons: "this edge swings". */}
+          {[-1, 1].map((dir) => (
+            <mesh key={dir} position={[0, dir * th * 1.05, 0]} rotation={[0, 0, (dir * Math.PI) / 2]} scale={[0.8, 1.4, 1]} raycast={() => {}}>
+              <circleGeometry args={[th * 0.36, 3]} />
+              <meshBasicMaterial color={color('tilt')} transparent opacity={opacity * 0.9} />
+            </mesh>
+          ))}
+          <mesh {...handlers('tilt')}>
+            <boxGeometry args={[tw + 0.04, th + 0.05, 0.05]} />
+            <meshBasicMaterial visible={false} />
+          </mesh>
+          {(tiltLive || emphasized) && (
+            <group position={[tw / 2 + 0.012, 0, 0.002]}>
+              <mesh geometry={roundedRectGeometry(0.1, 0.03, 0.015)} position={[0.05, 0, -0.001]} raycast={() => {}}>
+                <meshBasicMaterial color={UI.panel} transparent opacity={0.9} depthWrite={false} />
+              </mesh>
+              <Label size={0.015} weight={600} anchorX="left" position={[0.012, 0, 0.001]}>
+                {`Tilt ${Math.round(tiltDeg)}°`}
+              </Label>
+            </group>
+          )}
+        </group>
+      )}
       <mesh position={[hx, hy, 0.006]} geometry={roundedRectGeometry(hr.w, hr.h, hr.h / 2)} {...handlers('move')}>
         <meshBasicMaterial color={color('move')} transparent opacity={opacity} />
       </mesh>

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { noEvents, PointerEvents, XR } from '@react-three/xr'
-import { PMREMGenerator } from 'three'
+import { NeutralToneMapping, PMREMGenerator } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { BoardContent } from '../board/BoardContent'
 import { useView } from '../board/viewStore'
@@ -109,6 +109,10 @@ export function Scene({ dark }: { dark: boolean }) {
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       camera={{ fov: 45, near: 0.02, far: 60, position: [0, 1.5, 2] }}
       style={{ touchAction: 'none' }}
+      onCreated={({ gl }) => {
+        // Neutral tone mapping keeps note, ink and UI colors true (ACES brightens and washes out pastel notes and marker ink).
+        gl.toneMapping = NeutralToneMapping
+      }}
     >
       <PointerEvents />
       <XR store={xrStore}>
