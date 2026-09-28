@@ -65,7 +65,8 @@ export function useCardFrames<C>(
   useFrame((_, dt) => {
     const now = performance.now()
     const view = useView.getState()
-    const { drag, skinSwitch, hoverCardId, detailCardId, leaving } = view
+    const { drag, skinSwitch, detailCardId, leaving } = view
+    const hoverCards = runtime.hoverCards
     const free = usePlacements.getState().freeCards
     const cards = useBoardStore.getState().doc.cards
     const reduced = useSettings.getState().reducedMotion
@@ -117,7 +118,7 @@ export function useCardFrames<C>(
       let lift = 0
       let clipMin = -Infinity
       let clipMax = Infinity
-      const hovered = hoverCardId === id && drag.phase === 'idle'
+      const hovered = drag.phase === 'idle' && isHovered(hoverCards, id)
 
       if (kind === 'slot') {
         const [cx, cy] = toLocal(r.x + r.w / 2, r.y + r.h / 2, [W, H])
@@ -198,6 +199,11 @@ export function useCardFrames<C>(
     }
     drawer.end()
   })
+}
+
+function isHovered(hover: ReadonlyMap<number, ID>, id: ID): boolean {
+  for (const v of hover.values()) if (v === id) return true
+  return false
 }
 
 /** Transform a card-local point (from the card's top-left, y down) to board-local 3D. */

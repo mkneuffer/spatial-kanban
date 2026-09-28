@@ -58,11 +58,11 @@ function SortableCard({ id, doc, skinId, dark, parked }: { id: ID; doc: BoardDoc
       style={{ transform: CSS.Translate.toString(transform), transition }}
       {...attributes}
       {...listeners}
-      onClick={() => useView.getState().set({ detailCardId: id, editCardId: null })}
+      onClick={() => useView.getState().select(id)}
       onKeyDown={(e) => {
         listeners?.onKeyDown?.(e)
         if (e.defaultPrevented) return
-        if (e.key === 'Enter') useView.getState().set({ detailCardId: id })
+        if (e.key === 'Enter') useView.getState().select(id)
       }}
     />
   )

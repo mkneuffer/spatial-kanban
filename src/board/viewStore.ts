@@ -15,14 +15,17 @@ export interface ColumnDrag {
   pointerId: number
   targetIndex: number
   u: number
+  /** Where the press started (board u) and the slop it must exceed to become a drag. */
+  u0: number
+  slop: number
+  /** False until the header has moved past the slop (a press alone shows no drop marker). */
+  moved: boolean
 }
 
 export interface ViewState {
   mode: ViewMode
   drag: DragState
   columnDrag: ColumnDrag | null
-  hoverCardId: ID | null
-  hoverColumnId: ID | null
   /** Card whose detail panel/drawer is open. */
   detailCardId: ID | null
   /** Card whose title is being edited (XR keyboard / voice, or the 2D drawer). */
@@ -35,8 +38,13 @@ export interface ViewState {
   fontsVersion: number
   /** Cards just archived, animating into the bin. */
   leaving: Record<ID, number>
-  set(changes: Partial<Omit<ViewState, 'set'>>): void
+  set(changes: Partial<Omit<ViewState, 'set' | 'setScroll' | 'select'>>): void
   setScroll(columnId: ID, value: number): void
+  /**
+   * Select a card (open its details) or clear the selection. Switching to another
+   * card, or clearing, also closes a title editor that belongs to a different card.
+   */
+  select(cardId: ID | null): void
 }
 
 export const SKIN_SWITCH_MS = 700
@@ -45,8 +53,6 @@ export const useView = create<ViewState>()((set) => ({
   mode: '2d',
   drag: IDLE,
   columnDrag: null,
-  hoverCardId: null,
-  hoverColumnId: null,
   detailCardId: null,
   editCardId: null,
   editIsNew: false,
@@ -56,4 +62,6 @@ export const useView = create<ViewState>()((set) => ({
   leaving: {},
   set: (changes) => set(changes),
   setScroll: (columnId, value) => set((s) => ({ scroll: { ...s.scroll, [columnId]: value } })),
+  select: (cardId) =>
+    set((s) => (s.editCardId && s.editCardId !== cardId ? { detailCardId: cardId, editCardId: null, editIsNew: false } : { detailCardId: cardId })),
 }))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dragReducer, IDLE, pickColumn, type DragContext, type DragEvent, type DragState, NEW_CARD_ID } from '../../src/board/drag'
+import { dragReducer, IDLE, MAX_TAP_SLOP, pickColumn, TAP_MAX_DIST, tapSlop, type DragContext, type DragEvent, type DragState, NEW_CARD_ID } from '../../src/board/drag'
 import { projectsLayout, projectsInsertionIndex } from '../../src/skins/projects/layout'
 import { approximateMeasure } from '../../src/board/text'
 import { createDemoBoard } from '../../src/data/seed'
@@ -25,14 +25,15 @@ function run(events: DragEvent[], start: DragState = IDLE) {
   return { state, effects }
 }
 
-const down = (kind: 'ray' | 'grab' = 'ray', t = 0, source: 'board' | 'pad' | 'free' = 'board', id: string | null = card.id): DragEvent => ({
+const down = (kind: 'ray' | 'grab' = 'ray', t = 0, source: 'board' | 'pad' | 'free' = 'board', id: string | null = card.id, z = 0, slop?: number): DragEvent => ({
   type: 'down',
   pointerId: 1,
   pointerKind: kind,
   cardId: id,
   source,
-  point: { u: cu, v: cv, z: 0, t },
+  point: { u: cu, v: cv, z, t },
   cardCenter: [cu, cv],
+  slop,
 })
 const move = (u: number, v: number, z = 0, t = 50): DragEvent => ({ type: 'move', pointerId: 1, point: { u, v, z, t } })
 const up = (u: number, v: number, z = 0, t = 100): DragEvent => ({ type: 'up', pointerId: 1, point: { u, v, z, t } })
@@ -115,8 +116,60 @@ describe('dragReducer', () => {
     expect(effects).toContainEqual({ type: 'padTap' })
   })
 
+  it('a far ray tap tolerates jitter that would start a drag up close', () => {
+    const slop = tapSlop('ray', 2.5)
+    expect(slop).toBeGreaterThan(TAP_MAX_DIST)
+    const far = run([down('ray', 0, 'board', card.id, 0, slop), move(cu + 0.03, cv, 0, 40), up(cu + 0.03, cv, 0, 120)])
+    expect(far.effects).toContainEqual({ type: 'detail', cardId: card.id })
+    const near = run([down('ray', 0, 'board', card.id, 0, tapSlop('ray', 0.3)), move(cu + 0.03, cv, 0, 40)])
+    expect(near.state.phase).toBe('dragOnBoard')
+  })
+
+  it('measures tear-off from where a grab picked the card up', () => {
+    // Grabbed from 7 cm away (the grab sphere's reach): pulling to 15 cm is only 8 cm of pull.
+    let { state } = run([down('grab', 0, 'board', card.id, 0.07), move(cu, cv + 0.02, 0.08, 20), move(cu, cv, 0.15, 60)])
+    expect(state.phase).toBe('dragOnBoard')
+    state = dragReducer(state, move(cu, cv, 0.2, 80), ctx).state
+    expect(state.phase).toBe('dragFree')
+  })
+
+  it('a tap on a parked card opens its details instead of re-parking it', () => {
+    const { effects, state } = run([down('ray', 0, 'free', card.id, 0.3), up(cu + 0.002, cv, 0.3, 90)])
+    expect(effects).toContainEqual({ type: 'detail', cardId: card.id })
+    expect(effects.some((e) => e.type === 'park')).toBe(false)
+    expect(state.phase).toBe('idle')
+  })
+
+  it('dragging a parked card keeps it free until it is back over the board', () => {
+    let { state } = run([down('ray', 0, 'free', card.id, 0.3), move(-0.4, cv, 0.3, 30)])
+    expect(state.phase).toBe('dragFree')
+    const r = dragReducer(state, up(-0.5, cv, 0.3, 200), ctx)
+    const park = r.effects.find((e) => e.type === 'park')
+    expect(park && park.type === 'park' && park.position[2]).toBeCloseTo(0.3)
+    state = dragReducer(state, move(cu, cv, 0.3, 60), ctx).state
+    expect(state.phase).toBe('dragOnBoard')
+  })
+
+  it('cancel returns to idle', () => {
+    const { state, effects } = run([down(), move(cu + 0.05, cv), { type: 'cancel', pointerId: 1 }])
+    expect(state.phase).toBe('idle')
+    expect(effects).toContainEqual({ type: 'cancel' })
+  })
+
   it('ignores other pointers', () => {
     const { state } = run([down(), { type: 'move', pointerId: 2, point: { u: 0, v: 0, z: 0, t: 10 } }])
     expect(state.phase).toBe('pressed')
+  })
+})
+
+describe('tapSlop', () => {
+  it('is fixed for direct pointers and scales with distance for rays, within bounds', () => {
+    expect(tapSlop('grab', 3)).toBe(TAP_MAX_DIST)
+    expect(tapSlop('touch', 3)).toBe(TAP_MAX_DIST)
+    expect(tapSlop('ray', 0.2)).toBe(TAP_MAX_DIST)
+    expect(tapSlop('ray', 3)).toBeGreaterThan(tapSlop('ray', 1))
+    expect(tapSlop('ray', 50)).toBe(MAX_TAP_SLOP)
+    expect(tapSlop('mouse', 2)).toBeLessThan(tapSlop('ray', 2))
+    expect(tapSlop('ray', Number.NaN)).toBe(TAP_MAX_DIST)
   })
 })

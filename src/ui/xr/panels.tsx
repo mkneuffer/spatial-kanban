@@ -135,7 +135,7 @@ export function DetailPanel3D({ cardId, onEditTitle }: { cardId: string; onEditT
   const column = card ? doc.columns[card.columnId] : undefined
   const labels = useMemo(() => (card ? card.labelIds.map((id) => doc.board.labels.find((l) => l.id === id)).filter(Boolean) : []), [card, doc])
   if (!card || !column) return null
-  const close = () => useView.getState().set({ detailCardId: null })
+  const close = () => useView.getState().select(null)
   const columns = doc.board.columnIds.map((id) => doc.columns[id])
   const W = 0.4
   const H = 0.5
