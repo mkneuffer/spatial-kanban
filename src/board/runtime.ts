@@ -4,6 +4,7 @@ import type { ID } from '../data/model'
 import { Animator } from './animator'
 import type { BoardLayout, CardSlot } from './layout'
 import type { TextMeasure } from './text'
+import type { BoardFX } from './fx'
 
 /**
  * Mutable per-board runtime shared by the board's 3D components. Stable
@@ -25,7 +26,11 @@ export interface BoardRuntime {
   /** Latest gap-free layout for hit testing. */
   baseLayout: BoardLayout | null
   interactive: boolean
+  /** Particle effects (no-ops until <BoardEffects> mounts, and under reduced motion). */
+  fx: BoardFX
 }
+
+const noFX: BoardFX = { land() {}, lift() {}, celebrate() {}, archive() {}, spawn() {}, sweep() {} }
 
 export function createRuntime(measure: TextMeasure): BoardRuntime {
   return {
@@ -39,6 +44,7 @@ export function createRuntime(measure: TextMeasure): BoardRuntime {
     measure,
     baseLayout: null,
     interactive: true,
+    fx: noFX,
   }
 }
 

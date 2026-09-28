@@ -10,6 +10,7 @@ import { PaperBatch, createPaperMaterial } from '../../render/paper'
 import { ShadowBatch, createShadowMaterial } from '../../render/shadows'
 import { TextBatch, placeText } from '../../render/textBatch'
 import { FONTS } from '../../render/fonts'
+import { inkFor, readableOn } from '../../render/contrast'
 import { useBoardStore } from '../../data/store'
 import { noteColor, STICKY_COLORS, whiteboardPalette } from './palette'
 import { noteContent, whiteboardMetrics, type WhiteboardContent } from './layout'
@@ -58,12 +59,16 @@ export function WhiteboardCards({ layout, highContrast, role }: CardsProps<White
       for (const { id, slot } of list) {
         const c = slot.content
         const card = doc.cards[id]
-        res.colors.set(id, new Color(card ? noteColor(card, doc) : STICKY_COLORS.canary))
+        const paper = card ? noteColor(card, doc) : STICKY_COLORS.canary
+        res.colors.set(id, new Color(paper))
+        // A custom note color can be dark: switch to light ink rather than lose the text.
+        const ink = readableOn(palette.noteInk, paper, 7)
+        const muted = readableOn(palette.noteMuted, paper, 4.5)
         c.lines.forEach((line, i) =>
-          t.set(`${id}:l${i}`, { text: line, font: FONTS.caveat500, fontSize: c.textSize, color: id === NEW_CARD_ID ? palette.inkMuted : palette.noteInk, anchorY: 'top' }),
+          t.set(`${id}:l${i}`, { text: line, font: FONTS.caveat700, fontSize: c.textSize, color: id === NEW_CARD_ID ? muted : ink, anchorY: 'top' }),
         )
-        for (const dot of c.dots) t.set(`${id}:d:${dot.id}`, { text: dot.letter, font: FONTS.inter700, fontSize: dot.d * 0.62, color: '#ffffff', anchorX: 'center' })
-        if (c.who) t.set(`${id}:who`, { text: c.who.text, font: FONTS.caveat700, fontSize: c.who.size, color: palette.inkMuted, anchorX: 'right' })
+        for (const dot of c.dots) t.set(`${id}:d:${dot.id}`, { text: dot.letter, font: FONTS.inter700, fontSize: dot.d * 0.62, color: inkFor(dot.color), anchorX: 'center' })
+        if (c.who) t.set(`${id}:who`, { text: c.who.text, font: FONTS.caveat700, fontSize: c.who.size, color: muted, anchorX: 'right' })
       }
       t.sweep()
     },
@@ -92,7 +97,8 @@ export function WhiteboardCards({ layout, highContrast, role }: CardsProps<White
       })
       const color = res.colors.get(id) ?? new Color(STICKY_COLORS.canary)
       res.paper.push({ x: a.x, y: a.y, z: z0, w: a.w, h: a.h, rot: a.rot, scale: a.scale, sx: f.sx, curl: a.curl, color })
-      if (highContrast || f.selected || f.hovered) {
+      // The flat border can't follow the paper's peel, so drop it while the note is lifted.
+      if ((highContrast || f.selected || f.hovered) && a.curl < 0.2) {
         const border = 0.0012 * Math.max(0.6, layout.k)
         res.edges.push({
           x: a.x, y: a.y, z: z0 - 0.0002, w: a.w + 2 * border, h: a.h + 2 * border, r: 0.001, rot: a.rot, sx: f.sx, scale: a.scale,
