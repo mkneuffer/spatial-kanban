@@ -1,7 +1,8 @@
 import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react'
 import type { BoardDoc, Card } from '../../data/model'
 import { hash01 } from '../../board/space'
-import { formatDue, initials } from '../../skins/projects/layout'
+import { initials } from '../../skins/projects/layout'
+import { cardDates } from '../../data/dates'
 import { noteColor } from '../../skins/whiteboard/palette'
 import { pillBg, pillText } from '../../skins/projects/palette'
 import { LabelGlyph } from './icons'
@@ -19,7 +20,7 @@ interface Props extends HTMLAttributes<HTMLDivElement> {
 export const FlatCard = forwardRef<HTMLDivElement, Props>(function FlatCard({ card, doc, skinId, dark, dragging, overlay, parked, style, ...rest }, ref) {
   const column = doc.columns[card.columnId]
   const labels = card.labelIds.map((id) => doc.board.labels.find((l) => l.id === id)).filter(Boolean)
-  const due = card.dueDate ? formatDue(card.dueDate) : null
+  const dates = cardDates(card)
   const sticky = skinId === 'whiteboard'
   const s: CSSProperties = {
     ...style,
@@ -28,7 +29,7 @@ export const FlatCard = forwardRef<HTMLDivElement, Props>(function FlatCard({ ca
   const describedBy = [
     labels.length ? `Labels: ${labels.map((l) => l!.name).join(', ')}.` : '',
     card.assignees.length ? `Assigned to ${card.assignees.map((p) => p.name).join(', ')}.` : '',
-    due ? `${due.text}${due.overdue ? ', overdue' : ''}.` : '',
+    ...dates.map((d) => `${d.text}${d.overdue ? ', overdue' : ''}.`),
     parked ? 'Parked in the room.' : '',
   ]
     .filter(Boolean)
@@ -62,9 +63,15 @@ export const FlatCard = forwardRef<HTMLDivElement, Props>(function FlatCard({ ca
           ))}
         </div>
       )}
-      {(due || card.assignees.length > 0) && (
+      {(dates.length > 0 || card.assignees.length > 0) && (
         <div className="footer">
-          {due ? <span className={due.overdue ? 'overdue' : ''}>{due.text}</span> : <span />}
+          <span className="dates">
+            {dates.map((d) => (
+              <span key={d.kind} className={`date ${d.kind}${d.overdue ? ' overdue' : ''}`}>
+                {d.text}
+              </span>
+            ))}
+          </span>
           <span className="who">{card.assignees.map((p) => initials(p.name)).join(' ')}</span>
           <span className="avatars">
             {card.assignees.slice(0, 3).map((p) => (
