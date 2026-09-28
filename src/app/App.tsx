@@ -16,7 +16,7 @@ import { FlatBoard } from '../ui/flat/FlatBoard'
 import { CardDrawer } from '../ui/flat/CardDrawer'
 import { Icon, Logo } from '../ui/flat/icons'
 import { Toasts } from '../ui/ToastHost'
-import { ArchivedDialog, HelpDialog } from '../ui/flat/Dialogs'
+import { ArchivedDialog, BoardDialog, HelpDialog } from '../ui/flat/Dialogs'
 import { toast } from '../ui/toasts'
 
 // The 3D/XR scene (three.js, R3F, WebXR) loads after the 2D board has painted.
@@ -34,6 +34,8 @@ function useDarkMode() {
   return dark
 }
 
+type DialogId = 'help' | 'archived' | 'board'
+
 const isEditable = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))
 
 export function App() {
@@ -44,7 +46,7 @@ export function App() {
   const haptics = useSettings((s) => s.haptics)
   const highContrast = useSettings((s) => s.highContrast)
   const dark = useDarkMode()
-  const [dialog, setDialog] = useState<'help' | 'archived' | null>(null)
+  const [dialog, setDialog] = useState<DialogId | null>(null)
 
   useEffect(() => setSoundEnabled(sound), [sound])
   useEffect(() => setHapticsEnabled(haptics), [haptics])
@@ -90,12 +92,13 @@ export function App() {
       {mode !== 'xr' && <CardDrawer dark={dark} />}
       {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
       {dialog === 'archived' && <ArchivedDialog onClose={() => setDialog(null)} />}
+      {dialog === 'board' && <BoardDialog onClose={() => setDialog(null)} />}
       <Toasts />
     </div>
   )
 }
 
-function TopBar({ onDialog }: { onDialog(d: 'help' | 'archived'): void }) {
+function TopBar({ onDialog }: { onDialog(d: DialogId): void }) {
   const title = useBoardStore((s) => s.doc.board.title)
   const canUndo = useBoardStore((s) => s.past.length > 0)
   const canRedo = useBoardStore((s) => s.future.length > 0)
@@ -178,7 +181,7 @@ const PRESETS: Array<[ScalePreset, string]> = [
   ['compact', 'Compact'],
 ]
 
-function MoreMenu({ onDialog }: { onDialog(d: 'help' | 'archived'): void }) {
+function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
   const [open, setOpen] = useState(false)
   const settings = useSettings()
   const ref = useRef<HTMLDivElement>(null)
@@ -246,6 +249,9 @@ function MoreMenu({ onDialog }: { onDialog(d: 'help' | 'archived'): void }) {
             </button>
           ))}
           <hr />
+          <button className="item" role="menuitem" onClick={() => (onDialog('board'), setOpen(false))}>
+            Edit board, columns & labels…
+          </button>
           <button className="item" role="menuitem" onClick={() => (onDialog('archived'), setOpen(false))}>
             Archived cards…
           </button>

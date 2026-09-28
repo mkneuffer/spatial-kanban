@@ -1,6 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useBoardStore } from '../../data/store'
 import { byOrderKey } from '../../data/ordering'
+import type { LabelIcon } from '../../data/model'
+import { LABEL_PRESETS } from '../../data/seed'
+import { ulid } from '../../data/ids'
+import { toast } from '../toasts'
+import { Icon, LabelGlyph } from './icons'
 
 function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -80,6 +85,184 @@ export function ArchivedDialog({ onClose }: { onClose(): void }) {
           ))}
         </div>
       )}
+    </Dialog>
+  )
+}
+
+const LABEL_ICONS: LabelIcon[] = ['dot', 'bug', 'star', 'brush', 'book', 'bolt', 'cube', 'flag']
+const WIP_LIMITS = [1, 2, 3, 4, 5, 6, 8, 10, 12]
+
+/**
+ * A text input that keeps a local draft and commits once: on blur, on Enter,
+ * or when it unmounts (for example when the dialog closes with Escape), so a
+ * rename is one undo step instead of one per keystroke.
+ */
+function CommitInput({ value, onCommit, multiline, ...rest }: { value: string; onCommit(value: string): void; multiline?: boolean; 'aria-label': string; placeholder?: string }) {
+  const [draft, setDraft] = useState(value)
+  const latest = useRef({ draft, value, onCommit })
+  latest.current = { draft, value, onCommit }
+  useEffect(() => setDraft(value), [value])
+  const commit = () => {
+    const { draft, value, onCommit } = latest.current
+    if (draft !== value) onCommit(draft)
+  }
+  useEffect(() => commit, [])
+  if (multiline) return <textarea {...rest} value={draft} rows={3} onChange={(e) => setDraft(e.target.value)} onBlur={commit} />
+  return (
+    <input
+      {...rest}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+    />
+  )
+}
+
+/**
+ * A color picker that previews locally and commits when the picker closes
+ * (the native `change` event), rather than on every drag tick.
+ */
+function ColorInput({ value, onCommit, label }: { value: string; onCommit(value: string): void; label: string }) {
+  const [draft, setDraft] = useState(value)
+  const ref = useRef<HTMLInputElement>(null)
+  const commit = useRef(onCommit)
+  commit.current = onCommit
+  useEffect(() => setDraft(value), [value])
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onChange = () => el.value !== value && commit.current(el.value)
+    el.addEventListener('change', onChange)
+    return () => el.removeEventListener('change', onChange)
+  }, [value])
+  return <input ref={ref} type="color" className="color-input" aria-label={label} value={draft} onChange={(e) => setDraft(e.target.value)} />
+}
+
+/** Edit the board itself: name, description, columns and labels. */
+export function BoardDialog({ onClose }: { onClose(): void }) {
+  const doc = useBoardStore((s) => s.doc)
+  const dispatch = useBoardStore((s) => s.dispatch)
+  const { board } = doc
+  const ids = board.columnIds
+  const liveCards = Object.values(doc.cards).filter((c) => !c.archived)
+  const cardCount = (columnId: string) => liveCards.filter((c) => c.columnId === columnId).length
+  const labelCount = (labelId: string) => Object.values(doc.cards).filter((c) => c.labelIds.includes(labelId)).length
+  const undo = { label: 'Undo', run: () => useBoardStore.getState().undo() }
+
+  const addColumn = () =>
+    dispatch({ type: 'column/create', column: { id: ulid(), boardId: board.id, title: 'New column', color: '#8b949e' } })
+
+  const addLabel = () => {
+    const used = new Set(board.labels.map((l) => l.color.toLowerCase()))
+    const preset = LABEL_PRESETS.find((p) => !used.has(p.color.toLowerCase()))
+    dispatch({ type: 'label/upsert', label: { id: ulid(), name: 'New label', color: preset?.color ?? '#6e7781', icon: preset?.icon ?? 'dot' } })
+  }
+
+  return (
+    <Dialog title="Edit board" onClose={onClose}>
+      <div className="board-editor">
+        <label className="field">
+          <span>Board name</span>
+          <CommitInput aria-label="Board name" value={board.title} onCommit={(t) => t.trim() && dispatch({ type: 'board/update', changes: { title: t.trim() } })} />
+        </label>
+        <label className="field">
+          <span>Description</span>
+          <CommitInput
+            multiline
+            aria-label="Board description"
+            placeholder="What is this board for?"
+            value={board.description ?? ''}
+            onCommit={(d) => dispatch({ type: 'board/update', changes: { description: d.trim() || undefined } })}
+          />
+        </label>
+
+        <h3>Columns</h3>
+        <ul className="edit-list" aria-label="Columns">
+          {ids.map((id, i) => {
+            const c = doc.columns[id]
+            if (!c) return null
+            return (
+              <li key={id} className="edit-row">
+                <ColorInput label={`${c.title} color`} value={c.color ?? '#8b949e'} onCommit={(color) => dispatch({ type: 'column/update', id, changes: { color } })} />
+                <CommitInput aria-label={`Column ${i + 1} name`} value={c.title} onCommit={(t) => t.trim() && dispatch({ type: 'column/update', id, changes: { title: t.trim() } })} />
+                <select
+                  aria-label={`${c.title} work-in-progress limit`}
+                  value={c.wipLimit ?? ''}
+                  onChange={(e) => dispatch({ type: 'column/update', id, changes: { wipLimit: e.target.value ? Number(e.target.value) : undefined } })}
+                >
+                  <option value="">No limit</option>
+                  {WIP_LIMITS.map((n) => (
+                    <option key={n} value={n}>
+                      WIP {n}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn ghost icon" aria-label={`Move ${c.title} left`} disabled={i === 0} onClick={() => dispatch({ type: 'column/move', id, toIndex: i - 1 })}>
+                  ←
+                </button>
+                <button className="btn ghost icon" aria-label={`Move ${c.title} right`} disabled={i === ids.length - 1} onClick={() => dispatch({ type: 'column/move', id, toIndex: i + 1 })}>
+                  →
+                </button>
+                <button
+                  className="btn ghost icon danger"
+                  aria-label={`Delete ${c.title} (its cards move to the neighbouring column)`}
+                  disabled={ids.length <= 1}
+                  onClick={() => {
+                    const target = ids[i - 1] ?? ids[i + 1]
+                    const n = cardCount(id)
+                    dispatch({ type: 'column/delete', id, moveCardsTo: target })
+                    toast(`Deleted “${c.title}”${n ? `; ${n} card${n === 1 ? '' : 's'} moved to “${doc.columns[target]?.title}”` : ''}`, { action: undo })
+                  }}
+                >
+                  <Icon name="trash" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <button className="btn" onClick={addColumn}>
+          <Icon name="plus" /> Add column
+        </button>
+
+        <h3>Labels</h3>
+        {board.labels.length === 0 && <p>No labels yet.</p>}
+        <ul className="edit-list" aria-label="Labels">
+          {board.labels.map((l, i) => {
+            const n = labelCount(l.id)
+            return (
+              <li key={l.id} className="edit-row">
+                <ColorInput label={`${l.name} color`} value={l.color} onCommit={(color) => dispatch({ type: 'label/upsert', label: { ...l, color } })} />
+                <span className="icon-select" style={{ color: l.color }}>
+                  <LabelGlyph icon={l.icon} />
+                  <select aria-label={`${l.name} icon`} value={l.icon ?? 'dot'} onChange={(e) => dispatch({ type: 'label/upsert', label: { ...l, icon: e.target.value as LabelIcon } })}>
+                    {LABEL_ICONS.map((icon) => (
+                      <option key={icon} value={icon}>
+                        {icon}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+                <CommitInput aria-label={`Label ${i + 1} name`} value={l.name} onCommit={(t) => t.trim() && dispatch({ type: 'label/upsert', label: { ...l, name: t.trim() } })} />
+                <span className="usage">{n === 1 ? '1 card' : `${n} cards`}</span>
+                <button
+                  className="btn ghost icon danger"
+                  aria-label={`Delete label ${l.name}`}
+                  onClick={() => {
+                    dispatch({ type: 'label/delete', id: l.id })
+                    toast(`Deleted label “${l.name}”${n ? ` from ${n} card${n === 1 ? '' : 's'}` : ''}`, { action: undo })
+                  }}
+                >
+                  <Icon name="trash" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <button className="btn" onClick={addLabel}>
+          <Icon name="plus" /> Add label
+        </button>
+      </div>
     </Dialog>
   )
 }

@@ -80,4 +80,40 @@ describe('board store', () => {
     s().dispatch({ type: 'column/move', id: ids[0], toIndex: 2 })
     expect(s().doc.board.columnIds).toEqual([ids[1], ids[2], ids[0], ...ids.slice(3)])
   })
+
+  it('edits the board name and description as one undo step each', () => {
+    const before = s().doc.board.title
+    s().dispatch({ type: 'board/update', changes: { title: 'Q4 roadmap', description: 'What ships this quarter' } })
+    expect(s().doc.board.title).toBe('Q4 roadmap')
+    expect(s().doc.board.description).toBe('What ships this quarter')
+    s().undo()
+    expect(s().doc.board.title).toBe(before)
+    expect(s().doc.board.description).toBeUndefined()
+  })
+
+  it('adds, edits and deletes labels', () => {
+    const count = s().doc.board.labels.length
+    s().dispatch({ type: 'label/upsert', label: { id: 'lbl-new', name: 'research', color: '#000000', icon: 'flag' } })
+    expect(s().doc.board.labels).toHaveLength(count + 1)
+    s().dispatch({ type: 'label/upsert', label: { id: 'lbl-new', name: 'spike', color: '#123456', icon: 'bolt' } })
+    expect(s().doc.board.labels.find((l) => l.id === 'lbl-new')).toMatchObject({ name: 'spike', color: '#123456', icon: 'bolt' })
+    expect(s().doc.board.labels).toHaveLength(count + 1)
+
+    const used = s().doc.board.labels[0].id
+    const tagged = Object.values(s().doc.cards).filter((c) => c.labelIds.includes(used)).length
+    expect(tagged).toBeGreaterThan(0)
+    s().dispatch({ type: 'label/delete', id: used })
+    expect(s().doc.board.labels.some((l) => l.id === used)).toBe(false)
+    expect(Object.values(s().doc.cards).some((c) => c.labelIds.includes(used))).toBe(false)
+    s().undo()
+    expect(Object.values(s().doc.cards).filter((c) => c.labelIds.includes(used)).length).toBe(tagged)
+  })
+
+  it('sets and clears a deadline separately from the due date', () => {
+    const card = s().createCard(s().doc.board.columnIds[0], 'Ship it')
+    s().dispatch({ type: 'card/update', id: card.id, changes: { dueDate: '2030-01-10', deadline: '2030-01-15' } })
+    s().dispatch({ type: 'card/update', id: card.id, changes: { deadline: undefined } })
+    expect(s().doc.cards[card.id].dueDate).toBe('2030-01-10')
+    expect(s().doc.cards[card.id].deadline).toBeUndefined()
+  })
 })
