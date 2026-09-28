@@ -1,5 +1,5 @@
 import { useBoardStore, onBoardPatches } from '../data/store'
-import { pickSettings, useSettings } from '../data/settings'
+import { DEFAULT_SETTINGS, pickSettings, useSettings } from '../data/settings'
 import { usePlacements } from '../data/placements'
 import {
   collectDirty,
@@ -35,6 +35,13 @@ function debounce(fn: () => void, ms: number) {
   return call
 }
 
+let flushNow: () => void = () => {}
+
+/** Write pending changes immediately (before the app may be backgrounded or closed). */
+export function flushPersistence() {
+  flushNow()
+}
+
 /**
  * Local-first persistence (PLAN §14, phase 1): load from IndexedDB on boot,
  * then save each change (debounced) using the entities Immer's patches touched.
@@ -63,7 +70,9 @@ export async function bootPersistence(): Promise<void> {
     const boardId = useBoardStore.getState().doc.board.id
     const deviceId = usePlacements.getState().deviceId
     const [placement, free] = await Promise.all([loadPlacement(db, boardId, deviceId), loadFreeCards(db, deviceId)])
-    usePlacements.getState().hydrate(placement, free)
+    // Placements saved before the whiteboard became the default remember the old default, not a choice.
+    const upgraded = placement && (settings?.version ?? 1) < 2 && placement.skinId === 'projects' ? { ...placement, skinId: DEFAULT_SETTINGS.skinId } : placement
+    usePlacements.getState().hydrate(upgraded, free)
   } catch (err) {
     console.warn('[persistence] load failed — starting from the demo board', err)
     useBoardStore.setState({ ready: true })
@@ -102,6 +111,7 @@ export async function bootPersistence(): Promise<void> {
     flushPlacement.flush()
     flushFree.flush()
   }
+  flushNow = flushAll
   window.addEventListener('pagehide', flushAll)
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushAll())
 }

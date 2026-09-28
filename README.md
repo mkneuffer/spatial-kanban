@@ -12,11 +12,13 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 
 ## Highlights
 
-- **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
+- **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. Desk and floating boards can be tilted: drag the hinge on the top edge, or use the menu. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
 - **The board stays put.** On Meta Quest the board is saved with a persistent anchor and comes back where you left it. If the room changed, you get "Board not found here — place it again?", with the size and skin kept.
 - **Direct manipulation.** Rays, pinch/grab, poke, touch and mouse all go through one pointer model. Pick up, drag, drop, tear a card off the board (pull it more than 12 cm away), park it in the room, throw it downward to archive it, or drop it on the bin. Create cards by pulling a blank one from the pad.
-- **Two skins, switched live.** *Projects* is a clean, GitHub-style board. *Whiteboard* is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. Cards flip in a wave while the layout morphs between skins.
-- **Text input in XR.** A 3D keyboard plus voice dictation (Web Speech API) where it's available.
+- **Two skins, switched live.** *Whiteboard* (the default) is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. *Projects* is a clean, GitHub-style board. Cards flip in a wave while the layout morphs between skins.
+- **Text input in XR.** The headset's system keyboard where the browser offers one (Meta Quest), otherwise a 3D keyboard, plus voice dictation (Web Speech API) where it's available.
+- **Effects.** Landing ripples, peel dust, confetti when a card reaches the last column, a puff at the bin, and a scan sweep when the board appears or changes skin. All of it switches off with reduced motion.
+- **Readable.** Text colors from column and label colors are checked against their background (WCAG contrast), so the whiteboard never gets pale or white ink.
 - **Local-first.** Everything is saved to IndexedDB on this device, with undo/redo and JSON import/export.
 - **Accessible.** The 2D board is fully keyboard- and screen-reader-operable. Labels always pair color with an icon, and there are high-contrast, reduced-motion and left-hand modes.
 - **Fast.** Instanced card bodies, pills and shadows, and batched SDF text. A 16-card board draws in **about 50 draw calls and 25k triangles** in XR, including controller models (the budget is under 150 calls).
@@ -46,6 +48,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Scroll a long column (Projects) | Thumbstick while hovering | Swipe | Wheel | Scroll |
 | Reorder columns | Drag a column header sideways | Same | Same | Column menu |
 | Move / resize the board | Drag the bar under the board / the corner | Same | – | – |
+| Tilt the board (desk, float) | Drag the hinge above the top edge, or Menu → Tilt | Same | – | – |
 | Menu (skins, size, settings, exit) | "Menu" on the board | HUD buttons | Top bar | Top bar |
 
 Press **?** in the 2D or 3D view for in-app help. Undo and redo are **⌘Z** and **⇧⌘Z**.

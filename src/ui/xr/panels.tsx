@@ -9,6 +9,8 @@ import { archiveWithAnimation } from '../../board/effects'
 import { useView } from '../../board/viewStore'
 import { formatDue } from '../../skins/projects/layout'
 import { useXRApp, exitXR } from '../../xr/session'
+import { canTilt, DEFAULT_TILT, setPlacementTilt, TILT_RANGE, tiltOf } from '../../xr/tilt'
+import { usePlacements } from '../../data/placements'
 import { useToasts } from '../toasts'
 import { Button3D, Label, Panel, Toggle3D, UI } from './primitives'
 
@@ -75,8 +77,11 @@ export function BoardMenu3D({ onMove, onReplace, onPreset, onClose }: { onMove()
   const settings = useSettings()
   const canUndo = useBoardStore((s) => s.past.length > 0)
   const canRedo = useBoardStore((s) => s.future.length > 0)
+  const placementMode = usePlacements((s) => s.placement?.mode)
+  const tilt = usePlacements((s) => (s.placement ? tiltOf(s.placement) : 0))
+  const tiltable = !!placementMode && canTilt(placementMode)
   const W = 0.36
-  const H = 0.64
+  const H = 0.64 + (tiltable ? 0.054 : 0)
   let y = H / 2 - 0.035
   const row = (h: number) => {
     const at = y - h / 2
@@ -89,6 +94,7 @@ export function BoardMenu3D({ onMove, onReplace, onPreset, onClose }: { onMove()
   const sizeLabelY = row(0.016)
   const sizeY = row(0.042)
   const placeY = row(0.042)
+  const tiltY = tiltable ? row(0.042) : 0
   const toggles = [
     ['Reduced motion', 'reducedMotion'],
     ['Sound', 'sound'],
@@ -118,6 +124,16 @@ export function BoardMenu3D({ onMove, onReplace, onPreset, onClose }: { onMove()
       ))}
       <Button3D label="Move board" width={0.158} height={0.042} position={[-0.083, placeY, 0]} onClick={onMove} />
       <Button3D label="Place again" width={0.158} height={0.042} position={[0.083, placeY, 0]} onClick={onReplace} />
+      {tiltable && (
+        <>
+          <Label size={0.016} anchorX="left" position={[-W / 2 + 0.02, tiltY, 0]}>
+            {`Tilt ${tilt}°`}
+          </Label>
+          <Button3D label="−5°" width={0.062} height={0.042} disabled={tilt <= TILT_RANGE[placementMode!][0]} position={[-0.012, tiltY, 0]} onClick={() => setPlacementTilt(tilt - 5)} />
+          <Button3D label="+5°" width={0.062} height={0.042} disabled={tilt >= TILT_RANGE[placementMode!][1]} position={[0.056, tiltY, 0]} onClick={() => setPlacementTilt(tilt + 5)} />
+          <Button3D label="Reset" width={0.07} height={0.042} variant="ghost" disabled={tilt === DEFAULT_TILT[placementMode!]} position={[0.13, tiltY, 0]} onClick={() => setPlacementTilt(DEFAULT_TILT[placementMode!])} />
+        </>
+      )}
       {toggles.map(([label, key], i) => (
         <Toggle3D key={key} label={label} width={W - 0.04} value={settings[key]} onChange={(v) => settings.set({ [key]: v })} position={[0, toggleYs[i], 0]} />
       ))}

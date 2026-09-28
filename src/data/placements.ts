@@ -66,7 +66,7 @@ export function createPlacement(boardId: ID, mode: PlacementMode, skinId: string
     mode,
     localOffset: IDENTITY_POSE,
     size: size ?? DEFAULT_SIZES[mode],
-    tiltDeg: mode === 'desk' ? 15 : undefined,
+    tiltDeg: mode === 'desk' ? 15 : mode === 'float' ? 0 : undefined,
     skinId,
     updatedAt: new Date().toISOString(),
   }

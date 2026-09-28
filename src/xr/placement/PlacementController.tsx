@@ -1,13 +1,14 @@
 import { useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useXR, useXRHitTestSource, useXRInputSourceEvent } from '@react-three/xr'
-import { Group, Matrix4, Quaternion, Vector3 } from 'three'
+import { Group, Matrix4, Quaternion, Vector3, type Mesh, type MeshBasicMaterial } from 'three'
 import type { PlacementMode } from '../../data/model'
 import { useSettings } from '../../data/settings'
 import { playSound } from '../../fx/audio'
 import { pulse } from '../../fx/haptics'
 import { roundedRectGeometry, Label, UI } from '../../ui/xr/primitives'
 import { useXRApp } from '../session'
+import { tiltBoardMatrix } from '../tilt'
 import { raycastPlanes, isDeskLabel, isWallLabel } from '../surfaces'
 import {
   classifyNormal,
@@ -67,6 +68,8 @@ export function PlacementController({ mode, size, tiltDeg, onConfirm }: Props) {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const ghost = useRef<Group>(null)
+  const fill = useRef<MeshBasicMaterial>(null)
+  const scan = useRef<Mesh>(null)
   const reticle = useRef<Group>(null)
   const [status, setStatus] = useState<'snapped' | 'manual'>('manual')
   const current = useRef<PlacementCandidate | null>(null)
@@ -110,7 +113,12 @@ export function PlacementController({ mode, size, tiltDeg, onConfirm }: Props) {
 
     let candidate: PlacementCandidate | null = null
     if (mode === 'float') {
-      candidate = { pose: floatPose(tmp.head, tmp.fwd), hit: null, source: 'manual' }
+      const pose = floatPose(tmp.head, tmp.fwd)
+      if (tiltDeg) {
+        // Keep the lean the user gave this board last time.
+        tiltBoardMatrix(tmp.m.compose(pose.position, pose.quaternion, tmp.s.set(1, 1, 1)), 'float', size, tiltDeg).decompose(pose.position, pose.quaternion, tmp.s)
+      }
+      candidate = { pose, hit: null, source: 'manual' }
     } else if (frame && refSpace) {
       // 1. Semantically labeled planes.
       const planeHits = planes.length ? raycastPlanes(frame, refSpace, planes, tmp.o, tmp.d) : []
@@ -182,6 +190,14 @@ export function PlacementController({ mode, size, tiltDeg, onConfirm }: Props) {
       ghost.current.position.copy(smooth.pos)
       ghost.current.quaternion.copy(smooth.rot)
     }
+    // Breathing fill and a scan line sweeping the ghost, so it reads as "not placed yet".
+    const reduced = useSettings.getState().reducedMotion
+    const tt = performance.now() / 1000
+    if (fill.current) fill.current.opacity = reduced ? 0.16 : 0.12 + 0.07 * (0.5 + 0.5 * Math.sin(tt * 3.2))
+    if (scan.current) {
+      scan.current.visible = !reduced
+      scan.current.position.y = (((tt * 0.55) % 1) - 0.5) * size[1]
+    }
     if (reticle.current) {
       reticle.current.visible = candidate.source !== 'manual'
       reticle.current.position.copy(candidate.pose.position)
@@ -205,7 +221,11 @@ export function PlacementController({ mode, size, tiltDeg, onConfirm }: Props) {
     <group>
       <group ref={ghost}>
         <mesh geometry={roundedRectGeometry(W, H, 0.02)} raycast={() => {}}>
-          <meshBasicMaterial color={color} transparent opacity={0.16} depthWrite={false} />
+          <meshBasicMaterial ref={fill} color={color} transparent opacity={0.16} depthWrite={false} />
+        </mesh>
+        <mesh ref={scan} position={[0, 0, 0.0015]} raycast={() => {}}>
+          <planeGeometry args={[W * 0.98, Math.max(0.004, H * 0.012)]} />
+          <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} />
         </mesh>
         <GhostOutline w={W} h={H} color={color} />
         <group position={[0, -H / 2 - 0.05, 0.002]}>
