@@ -11,6 +11,7 @@ import {
   type LayoutInput,
 } from '../../board/layout'
 import { ellipsize, wrapText, type TextMeasure } from '../../board/text'
+import { cardDates } from '../../data/dates'
 
 /** Card-local content layout, measured from the card's top-left corner (m). */
 export interface ProjectsContent {
@@ -63,17 +64,6 @@ export function initials(name: string): string {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-export function formatDue(date: string, today = new Date()): { text: string; overdue: boolean } {
-  const [y, m, d] = date.split('-').map(Number)
-  const due = new Date(y, (m ?? 1) - 1, d ?? 1)
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const days = Math.round((due.getTime() - start.getTime()) / 86_400_000)
-  const label = days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due ${MONTHS[due.getMonth()]} ${due.getDate()}`
-  return { text: label, overdue: days < 0 }
-}
-
 export function projectsCardContent(card: Card, doc: BoardDoc, width: number, M: ProjectsMetrics, measure: TextMeasure): { content: ProjectsContent; height: number } {
   const innerW = width - 2 * M.cardPad
   const refRowH = Math.max(M.refSize * 1.4, M.avatarD)
@@ -115,10 +105,11 @@ export function projectsCardContent(card: Card, doc: BoardDoc, width: number, M:
   }
 
   let due: ProjectsContent['due']
-  if (card.dueDate) {
-    const f = formatDue(card.dueDate)
+  const dates = cardDates(card)
+  if (dates.length) {
+    const text = ellipsize(dates.map((d) => d.text).join(' · '), innerW, measure, 'Inter', M.dueSize, 400)
     y += M.dueSize * 0.6
-    due = { text: f.text, overdue: f.overdue, x: M.cardPad, y, size: M.dueSize }
+    due = { text, overdue: dates.some((d) => d.overdue), x: M.cardPad, y, size: M.dueSize }
     y += M.dueSize * 1.3
   }
 

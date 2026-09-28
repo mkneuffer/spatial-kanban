@@ -15,7 +15,7 @@ export const projectsSkin: Skin<ProjectsContent> = {
   sounds: { pick: 'clickSoft', drop: 'drop', tear: 'tear', stick: 'click', archive: 'whoosh', tick: 'tick' },
   // Neutral cards: color comes only from labels and status dots.
   cardColor: (_card, _doc, dark) => (dark ? '#1f2630' : '#ffffff'),
-  visibleFields: ['number', 'title', 'labelIds', 'assignees', 'dueDate'],
+  visibleFields: ['number', 'title', 'labelIds', 'assignees', 'dueDate', 'deadline'],
   Surface: ProjectsSurface,
   Cards: ProjectsCards,
 }

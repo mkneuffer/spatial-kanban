@@ -9,6 +9,7 @@ export interface Board {
   id: ID
   title: string
   columnIds: ID[] // column order
+  description?: string
   labels: Label[]
   createdAt: string
   updatedAt: string
@@ -33,7 +34,8 @@ export interface Card {
   description?: string // markdown, edited in 2D
   labelIds: ID[]
   assignees: Person[]
-  dueDate?: string
+  dueDate?: string // YYYY-MM-DD, the planned date
+  deadline?: string // YYYY-MM-DD, the hard deadline
   color?: string // explicit color override (sticky skin)
   archived: boolean
   /** Short human reference shown on the card, e.g. 101 → "#101". */
