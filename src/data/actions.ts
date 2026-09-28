@@ -16,7 +16,7 @@ export type BoardAction =
   | { type: 'column/update'; id: ID; changes: Partial<Omit<Column, 'id' | 'boardId'>> }
   | { type: 'column/move'; id: ID; toIndex: number }
   | { type: 'column/delete'; id: ID; moveCardsTo?: ID }
-  | { type: 'board/update'; changes: Partial<Pick<Board, 'title'>> }
+  | { type: 'board/update'; changes: Partial<Pick<Board, 'title' | 'description'>> }
   | { type: 'label/upsert'; label: Label }
   | { type: 'label/delete'; id: ID }
   | { type: 'doc/replace'; doc: BoardDoc }

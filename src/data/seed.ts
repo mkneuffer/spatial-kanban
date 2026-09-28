@@ -27,6 +27,7 @@ interface SeedCard {
   labels?: string[]
   who?: string[]
   due?: number // days from now
+  deadline?: number // days from now
   description?: string
 }
 
@@ -46,7 +47,7 @@ const COLUMNS: Array<{ title: string; color: string; wipLimit?: number; cards: S
     color: '#2f81f7',
     cards: [
       { title: 'Throw a card downward to archive it', labels: ['xr', 'feature'], who: ['p-kenji'] },
-      { title: 'Document the Quest on-device testing loop', labels: ['docs'], who: ['p-luis'], due: 6 },
+      { title: 'Document the Quest on-device testing loop', labels: ['docs'], who: ['p-luis'], due: 6, deadline: 10 },
       {
         title: 'LOD: drop avatars and labels beyond 3 m',
         labels: ['perf'],
@@ -107,7 +108,7 @@ export function createDemoBoard(now: Date = new Date()): BoardDoc {
     const keys = keysForCount(col.cards.length)
     col.cards.forEach((c, i) => {
       const id = ulid()
-      const due = c.due !== undefined ? new Date(now.getTime() + c.due * 86_400_000).toISOString().slice(0, 10) : undefined
+      const inDays = (n?: number) => (n !== undefined ? new Date(now.getTime() + n * 86_400_000).toISOString().slice(0, 10) : undefined)
       cards[id] = {
         id,
         boardId,
@@ -117,7 +118,8 @@ export function createDemoBoard(now: Date = new Date()): BoardDoc {
         description: c.description,
         labelIds: (c.labels ?? []).map((n) => labelByName.get(n)!).filter(Boolean),
         assignees: (c.who ?? []).map((pid) => PEOPLE.find((p) => p.id === pid)!).filter(Boolean),
-        dueDate: due,
+        dueDate: inDays(c.due),
+        deadline: inDays(c.deadline),
         archived: false,
         number: number++,
         createdAt: iso,
