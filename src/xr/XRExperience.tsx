@@ -10,7 +10,8 @@ import { BoardContent } from '../board/BoardContent'
 import { useView } from '../board/viewStore'
 import type { BoardLayout } from '../board/layout'
 import { toLocal } from '../board/space'
-import { Button3D } from '../ui/xr/primitives'
+import { Button3D, Label } from '../ui/xr/primitives'
+import { useVoice } from '../voice/voice'
 import { BoardMenu3D, DetailPanel3D, NotFoundPanel, PlacementChooser, Toast3D } from '../ui/xr/panels'
 import { Keyboard3D } from '../ui/xr/Keyboard3D'
 import { toast } from '../ui/toasts'
@@ -300,6 +301,7 @@ function AnchoredBoard({ dark }: { dark: boolean }) {
           <>
             <BoardHandles layout={layout} emphasized={phase === 'adjusting'} />
             <MenuButton layout={layout} />
+            <VoiceButton3D layout={layout} />
             {menuOpen && (
               <group position={[side * (W / 2 + 0.04), H / 2, 0.01]}>
                 <DistanceScaled base={Math.max(0.6, Math.min(1, 0.4 + 0.6 * layout.k))}>
@@ -401,6 +403,41 @@ function MenuButton({ layout }: { layout: BoardLayout }) {
       position={[x - (layout.menu.x > layout.size[0] / 2 ? (w - r.w) / 2 : -(w - r.w) / 2), y, 0.004]}
       onClick={() => useXRApp.getState().set({ menuOpen: !open })}
     />
+  )
+}
+
+/** Voice commands in a headset: sits beside Menu, and shows what it's hearing. */
+function VoiceButton3D({ layout }: { layout: BoardLayout }) {
+  const supported = useVoice((s) => s.supported)
+  const listening = useVoice((s) => s.listening)
+  const heard = useVoice((s) => s.heard)
+  if (!supported) return null
+  const r = layout.menu
+  const h = Math.max(0.034, r.h)
+  const menuW = Math.max(0.07, r.w * 1.9)
+  const w = Math.max(0.08, r.w * 2.1)
+  const [mx, y] = toLocal(r.x + r.w / 2, r.y + r.h / 2, layout.size)
+  // Menu grows toward the board's middle; put Voice on the far side of it from the edge.
+  const right = layout.menu.x > layout.size[0] / 2
+  const menuCenter = mx - (right ? (menuW - r.w) / 2 : -(menuW - r.w) / 2)
+  const x = menuCenter + (right ? -1 : 1) * (menuW / 2 + 0.008 + w / 2)
+  return (
+    <group>
+      <Button3D
+        label={listening ? 'Listening' : 'Voice'}
+        width={w}
+        height={h}
+        fontSize={Math.max(0.012, r.h * 0.38)}
+        active={listening}
+        position={[x, y, 0.004]}
+        onClick={() => useVoice.getState().toggle()}
+      />
+      {listening && (
+        <Label size={Math.max(0.012, r.h * 0.36)} anchorX={right ? 'right' : 'left'} maxWidth={0.5} position={[x + (right ? w / 2 : -w / 2), y + h * 1.1, 0.006]}>
+          {heard ? `“${heard}”` : 'Say a command, e.g. “new card …”'}
+        </Label>
+      )}
+    </group>
   )
 }
 

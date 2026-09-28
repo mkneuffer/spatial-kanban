@@ -13,6 +13,7 @@ import type { BoardLayout, DragGap, LayoutOptions } from './layout'
 import { BoardRuntimeContext, createRuntime, type BoardRuntime } from './runtime'
 import { canvasMeasure } from './text'
 import { SKIN_SWITCH_MS, useView } from './viewStore'
+import { registerPointerFocus } from '../voice/focus'
 
 interface Props {
   size: [number, number]
@@ -50,6 +51,15 @@ function useLayouts(skin: AnySkin | null, size: [number, number], dragGap: DragG
  */
 export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Props) {
   const runtime = useMemo(() => createRuntime(canvasMeasure), [])
+  // Voice commands resolve "it" and the default column from what a pointer is over.
+  useEffect(
+    () =>
+      registerPointerFocus(() => ({
+        cardId: [...runtime.hoverCards.values()].at(-1) ?? null,
+        columnId: [...runtime.hoverColumns.values()].at(-1)?.columnId ?? null,
+      })),
+    [runtime],
+  )
   const localRoot = useRef<Group>(null)
   const skinId = useSettings((s) => s.skinId)
   const highContrast = useSettings((s) => s.highContrast)

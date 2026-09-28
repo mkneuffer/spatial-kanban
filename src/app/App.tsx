@@ -19,6 +19,7 @@ import { Toasts } from '../ui/ToastHost'
 import { ArchivedDialog, BoardDialog, HelpDialog } from '../ui/flat/Dialogs'
 import { BoardsDialog, SyncIndicator } from '../ui/flat/BoardsDialog'
 import { useIntegrations } from '../integrations/store'
+import { useVoice } from '../voice/voice'
 import { toast } from '../ui/toasts'
 
 // The 3D/XR scene (three.js, R3F, WebXR) loads after the 2D board has painted.
@@ -50,6 +51,10 @@ export function App() {
   const dark = useDarkMode()
   const [dialog, setDialog] = useState<DialogId | null>(null)
   const boardsOpen = useIntegrations((s) => s.panel.open)
+  const helpRequests = useVoice((s) => s.helpRequests)
+  useEffect(() => {
+    if (helpRequests && useView.getState().mode !== 'xr') setDialog('help')
+  }, [helpRequests])
 
   useEffect(() => setSoundEnabled(sound), [sound])
   useEffect(() => setHapticsEnabled(haptics), [haptics])
@@ -69,6 +74,10 @@ export function App() {
         e.preventDefault()
         useBoardStore.getState().redo()
       } else if (e.key === '?') setDialog('help')
+      else if (!mod && !e.altKey && e.key.toLowerCase() === 'v' && useVoice.getState().supported) {
+        e.preventDefault()
+        useVoice.getState().toggle()
+      }
     }
     window.addEventListener('keydown', onKey)
     const unlock = () => unlockAudio()
@@ -97,6 +106,7 @@ export function App() {
       {dialog === 'archived' && <ArchivedDialog onClose={() => setDialog(null)} />}
       {dialog === 'board' && <BoardDialog onClose={() => setDialog(null)} />}
       {boardsOpen && <BoardsDialog onClose={() => useIntegrations.getState().closePanel()} />}
+      <VoiceCaption />
       <Toasts />
     </div>
   )
@@ -166,6 +176,7 @@ function TopBar({ onDialog }: { onDialog(d: DialogId): void }) {
         <button className="btn ghost icon hide-sm" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={!canRedo} onClick={() => useBoardStore.getState().redo()}>
           <Icon name="redo" />
         </button>
+        <VoiceButton />
         <MoreMenu onDialog={onDialog} />
       </div>
     </header>
@@ -353,6 +364,36 @@ function CapabilityBanner() {
       <button className="btn ghost icon" aria-label="Dismiss" onClick={dismiss}>
         <Icon name="close" />
       </button>
+    </div>
+  )
+}
+
+function VoiceButton() {
+  const supported = useVoice((s) => s.supported)
+  const listening = useVoice((s) => s.listening)
+  if (!supported) return null
+  return (
+    <button
+      className={`btn ghost icon${listening ? ' listening' : ''}`}
+      aria-label={listening ? 'Stop listening' : 'Voice command'}
+      aria-pressed={listening}
+      title="Voice command (V)"
+      onClick={() => useVoice.getState().toggle()}
+    >
+      <Icon name="mic" />
+    </button>
+  )
+}
+
+/** What's being heard while a voice command is in progress. */
+function VoiceCaption() {
+  const listening = useVoice((s) => s.listening)
+  const heard = useVoice((s) => s.heard)
+  if (!listening) return null
+  return (
+    <div className="voice-caption" role="status" aria-live="polite">
+      <span className="dot" aria-hidden="true" />
+      {heard ? `“${heard}”` : 'Listening… try “new card …” or “move … to …”'}
     </div>
   )
 }

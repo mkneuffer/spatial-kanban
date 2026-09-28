@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import type { Group } from 'three'
 import { useDeviceCaps } from '../../xr/capabilities'
 import { onXRBackground } from '../../xr/lifecycle'
+import { createRecognition, type SpeechRecognitionLike } from '../../voice/speech'
 import { closeSystemKeyboard, MAX_TITLE, openSystemKeyboard, systemKeyboardAvailable, systemKeyboardInput } from '../../xr/systemKeyboard'
 import { playSound } from '../../fx/audio'
 import { useSettings } from '../../data/settings'
@@ -13,28 +14,6 @@ const ROWS = ['1234567890', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 const KEY_W = 0.04
 const KEY_H = 0.046
 const GAP = 0.0055
-
-interface SpeechRecognitionLike {
-  lang: string
-  interimResults: boolean
-  continuous: boolean
-  start(): void
-  stop(): void
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null
-  onend: (() => void) | null
-  onerror: ((e: unknown) => void) | null
-}
-
-function createRecognition(): SpeechRecognitionLike | null {
-  const w = window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }
-  const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition
-  if (!Ctor) return null
-  const r = new Ctor()
-  r.lang = navigator.language || 'en-US'
-  r.interimResults = true
-  r.continuous = false
-  return r
-}
 
 /**
  * Text input in XR (PLAN §6.5). Uses the headset's system keyboard when the
