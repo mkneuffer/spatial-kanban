@@ -7,7 +7,7 @@ import { SKINS } from '../../skins/registry'
 import { switchSkin } from '../../board/BoardContent'
 import { archiveWithAnimation } from '../../board/effects'
 import { useView } from '../../board/viewStore'
-import { formatDue } from '../../skins/projects/layout'
+import { cardDates } from '../../data/dates'
 import { useXRApp, exitXR } from '../../xr/session'
 import { canTilt, DEFAULT_TILT, setPlacementTilt, TILT_RANGE, tiltOf } from '../../xr/tilt'
 import { usePlacements } from '../../data/placements'
@@ -156,7 +156,7 @@ export function DetailPanel3D({ cardId, onEditTitle }: { cardId: string; onEditT
   const W = 0.4
   const H = 0.5
   const top = H / 2
-  const due = card.dueDate ? formatDue(card.dueDate) : null
+  const dates = cardDates(card)
   const desc = card.description ? (card.description.length > 260 ? `${card.description.slice(0, 259)}…` : card.description) : 'No description. Add one in the 2D view.'
   return (
     <Panel width={W} height={H} radius={0.024}>
@@ -171,7 +171,7 @@ export function DetailPanel3D({ cardId, onEditTitle }: { cardId: string; onEditT
         {[
           labels.length ? `Labels: ${labels.map((l) => l!.name).join(', ')}` : null,
           card.assignees.length ? `Assignees: ${card.assignees.map((p) => p.name).join(', ')}` : null,
-          due ? `${due.text}${due.overdue ? ' (overdue)' : ''}` : null,
+          ...dates.map((d) => `${d.text}${d.overdue ? ' (overdue)' : ''}`),
         ]
           .filter(Boolean)
           .join('\n') || 'No labels or assignees'}

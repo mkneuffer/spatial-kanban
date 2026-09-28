@@ -19,6 +19,8 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 - **Text input in XR.** The headset's system keyboard where the browser offers one (Meta Quest), otherwise a 3D keyboard, plus voice dictation (Web Speech API) where it's available.
 - **Effects.** Landing ripples, peel dust, confetti when a card reaches the last column, a puff at the bin, and a scan sweep when the board appears or changes skin. All of it switches off with reduced motion.
 - **Readable.** Text colors from column and label colors are checked against their background (WCAG contrast), so the whiteboard never gets pale or white ink.
+- **Editable board.** Rename the board and give it a description, and add, rename, recolor, reorder or delete columns and labels (each label gets a color and an icon) from **⋯ → Edit board, columns & labels**. Every edit can be undone.
+- **Due dates and deadlines.** A card can have a planned due date, a hard deadline, or both. They show on the card and turn red once they've passed, and the drawer warns you when the due date falls after the deadline.
 - **Local-first.** Everything is saved to IndexedDB on this device, with undo/redo and JSON import/export.
 - **Accessible.** The 2D board is fully keyboard- and screen-reader-operable. Labels always pair color with an icon, and there are high-contrast, reduced-motion and left-hand modes.
 - **Fast.** Instanced card bodies, pills and shadows, and batched SDF text. A 16-card board draws in **about 50 draw calls and 25k triangles** in XR, including controller models (the budget is under 150 calls).
@@ -50,6 +52,8 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Move / resize the board | Drag the bar under the board / the corner | Same | – | – |
 | Tilt the board (desk, float) | Drag the hinge above the top edge, or Menu → Tilt | Same | – | – |
 | Menu (skins, size, settings, exit) | "Menu" on the board | HUD buttons | Top bar | Top bar |
+| Edit board, columns, labels | – | – | ⋯ → Edit board | ⋯ → Edit board |
+| Due date / deadline | Shown in card details | Card details | Card details | Card details |
 
 Press **?** in the 2D or 3D view for in-app help. Undo and redo are **⌘Z** and **⇧⌘Z**.
 
@@ -175,7 +179,7 @@ tests/unit/     ordering, store, layout (both skins), drag, snapping, persistenc
 
 ## Testing
 
-- `npm test` runs 57 unit tests: fractional ordering, store actions and undo/redo, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, drag, tear-off hysteresis, throw to archive, pad, bin), snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
+- `npm test` runs 64 unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, drag, tear-off hysteresis, throw to archive, pad, bin), snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
 - **XR in the browser:** `npm run dev`, then use the IWER emulator. With `?devui=0`, a script can drive `xrStore.getState().emulator.controllers.right`.
 - **On device:** Quest 3 over `adb reverse`, with remote debugging at `chrome://inspect`.
 
