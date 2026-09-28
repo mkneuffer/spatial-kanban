@@ -3,6 +3,7 @@ import { useBoardStore } from '../../data/store'
 import { byOrderKey } from '../../data/ordering'
 import { cardRef, type LabelIcon } from '../../data/model'
 import { PROVIDER_NAMES } from '../../integrations/protocol'
+import { VOICE_EXAMPLES } from '../../voice/commands'
 import { LABEL_PRESETS } from '../../data/seed'
 import { ulid } from '../../data/ids'
 import { toast } from '../toasts'
@@ -55,6 +56,15 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
       <ul>
         <li>Tab to a card, press Space to pick it up, arrow keys to move, Space to drop, Escape to cancel.</li>
         <li>Enter opens details. ⌘/Ctrl+Z undoes, ⇧⌘Z redoes. Press ? for this help.</li>
+      </ul>
+      <strong>Voice commands</strong>
+      <p>Press the microphone (or V; “Voice” on the board in a headset) and say one command. No AI involved: it matches what you say against your cards and columns.</p>
+      <ul className="voice-examples">
+        {VOICE_EXAMPLES.map(([say, what]) => (
+          <li key={say}>
+            “{say}”{what ? ` — ${what}` : ''}
+          </li>
+        ))}
       </ul>
     </Dialog>
   )

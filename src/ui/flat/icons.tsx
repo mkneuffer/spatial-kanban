@@ -32,7 +32,7 @@ export function Logo({ size = 22 }: { size?: number }) {
   )
 }
 
-export type IconName = 'undo' | 'redo' | 'more' | 'close' | 'plus' | 'cube' | 'board' | 'glasses' | 'phone' | 'archive' | 'trash' | 'help' | 'sync' | 'external'
+export type IconName = 'undo' | 'redo' | 'more' | 'close' | 'plus' | 'cube' | 'board' | 'glasses' | 'phone' | 'archive' | 'trash' | 'help' | 'sync' | 'external' | 'mic'
 
 export function Icon({ name }: { name: IconName }) {
   const d: Record<typeof name, string> = {
@@ -50,6 +50,7 @@ export function Icon({ name }: { name: IconName }) {
     help: 'M6 6a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.5v.3M8 12h.01',
     sync: 'M13.5 8a5.5 5.5 0 0 1-9.9 3.3M2.5 8a5.5 5.5 0 0 1 9.9-3.3M12.5 1.5v3.2H9.3M3.5 14.5v-3.2h3.2',
     external: 'M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v4h-9v-9h4',
+    mic: 'M8 1.5a2 2 0 0 1 2 2v4a2 2 0 0 1-4 0v-4a2 2 0 0 1 2-2zM4 7.5a4 4 0 0 0 8 0M8 11.5v3M5.5 14.5h5',
   }
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={name === 'more' ? 2.6 : 1.5} strokeLinecap="round" strokeLinejoin="round">

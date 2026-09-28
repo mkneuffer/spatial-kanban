@@ -17,6 +17,7 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 - **Direct manipulation.** Rays, pinch/grab, poke, touch and mouse all go through one pointer model. Pick up, drag, drop, tear a card off the board (pull it more than 12 cm away), park it in the room, throw it downward to archive it, or drop it on the bin. Create cards by pulling a blank one from the pad.
 - **Two skins, switched live.** *Whiteboard* (the default) is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. *Projects* is a clean, GitHub-style board. Cards flip in a wave while the layout morphs between skins.
 - **Text input in XR.** The headset's system keyboard where the browser offers one (Meta Quest), otherwise a 3D keyboard, plus voice dictation (Web Speech API) where it's available.
+- **Voice commands, no AI needed.** Press "Voice" on the board (or the mic / **V** on a desktop) and say "new card fix the login bug", "move login bug to done", "rename it to …", "archive card 104" or "undo". A small grammar matches what you said against your cards and columns: by title words, number, key (ENG-12), "the first card in Done", or "it" for the card you're pointing at or just used. Everything can be undone.
 - **Effects.** Landing ripples, peel dust, confetti when a card reaches the last column, a puff at the bin, and a scan sweep when the board appears or changes skin. All of it switches off with reduced motion.
 - **Readable.** Text colors from column and label colors are checked against their background (WCAG contrast), so the whiteboard never gets pale or white ink.
 - **Editable board.** Rename the board and give it a description, and add, rename, recolor, reorder or delete columns and labels (each label gets a color and an icon) from **⋯ → Edit board, columns & labels**. Every edit can be undone.
@@ -53,6 +54,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Move / resize the board | Drag the bar under the board / the corner | Same | – | – |
 | Tilt the board (desk, float) | Drag the hinge above the top edge, or Menu → Tilt | Same | – | – |
 | Menu (skins, size, settings, exit) | "Menu" on the board | HUD buttons | Top bar | Top bar |
+| Voice command | "Voice" beside Menu on the board | Mic in the top bar | Mic or **V** | Mic or **V** |
 | Edit board, columns, labels | – | – | ⋯ → Edit board | ⋯ → Edit board |
 | Due date / deadline | Shown in card details | Card details | Card details | Card details |
 
@@ -253,8 +255,9 @@ Not started: live multi-user Yjs sync with presence, share links, and Phase 4.
 
 ## Testing
 
-- `npm test` runs 141 tests:
+- `npm test` runs 158 tests:
   - Unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, drag, tear-off hysteresis, throw to archive, pad, bin), snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
+  - Voice commands: creating (default, pointed-at or named column), moving, "mark … done", renaming (titles containing "to"), descriptions, archiving, pronouns, card numbers, ambiguous or unknown cards, and every example shown in Help.
   - The sync planner: pulls, pushes, conflicts, minimal reorders, refusals, deleted cards.
   - The sync engine: debouncing, in-flight creates, refusals, stale reads.
   - The Worker, called through its `fetch` handler with D1 backed by `node:sqlite` and provider APIs mocked: OAuth round trips (state checks, Trello's fragment flow, second device), encrypted token storage, token refresh with rotation, project listing and mapping, op application, idempotent creates, validation, cross-origin refusal. Plus each provider's mapping (Jira ADF ↔ text, Linear state order, Trello positions).
