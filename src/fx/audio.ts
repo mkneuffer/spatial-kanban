@@ -13,18 +13,33 @@ export type SoundName =
   | 'stick'
   | 'whoosh'
   | 'key'
+  | 'chime'
+  | 'pop'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
 let noiseBuffer: AudioBuffer | null = null
 let enabled = true
+/** True while the app is in the background (XR system menu open, tab hidden). */
+let paused = false
 
 export function setSoundEnabled(on: boolean) {
   enabled = on
 }
 
+/** Silence and release the audio device while the app is backgrounded. */
+export function pauseAudio() {
+  paused = true
+  if (ctx && ctx.state === 'running') void ctx.suspend().catch(() => undefined)
+}
+
+export function resumeAudio() {
+  paused = false
+  if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => undefined)
+}
+
 function audio(): AudioContext | null {
-  if (!enabled) return null
+  if (!enabled || paused) return null
   try {
     if (!ctx) {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -123,6 +138,15 @@ export function playSound(name: SoundName) {
       break
     case 'key':
       tone(1400, 1300, 0.05, 0.001, 0.02, 'square')
+      break
+    case 'chime':
+      // A bright little arpeggio for finishing a card.
+      tone(1046, 1046, 0.06, 0.004, 0.22, 'sine')
+      tone(1318, 1318, 0.05, 0.004, 0.24, 'sine', 0.07)
+      tone(1568, 1568, 0.05, 0.004, 0.32, 'sine', 0.14)
+      break
+    case 'pop':
+      tone(520, 980, 0.08, 0.003, 0.05, 'sine')
       break
   }
 }

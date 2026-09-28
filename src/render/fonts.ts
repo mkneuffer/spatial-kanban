@@ -29,7 +29,7 @@ export const FONTS = {
 const CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?\'"()[]{}#&@%+-–—/…·×✓•<>=_*'
 
 export function preloadSdfFonts(): Promise<void> {
-  const list = [FONTS.inter400, FONTS.inter500, FONTS.inter600, FONTS.caveat500, FONTS.marker]
+  const list = [FONTS.inter400, FONTS.inter500, FONTS.inter600, FONTS.inter700, FONTS.caveat700, FONTS.marker]
   return Promise.all(
     list.map((font) => new Promise<void>((resolve) => preloadFont({ font, characters: CHARSET }, () => resolve()))),
   ).then(() => undefined)
@@ -43,6 +43,7 @@ export async function loadMeasureFonts(): Promise<void> {
     document.fonts.load('400 16px "Inter"'),
     document.fonts.load('600 16px "Inter"'),
     document.fonts.load('500 16px "Caveat"'),
+    document.fonts.load('700 16px "Caveat"'),
     document.fonts.load('400 16px "Permanent Marker"'),
   ]).catch(() => undefined)
 }

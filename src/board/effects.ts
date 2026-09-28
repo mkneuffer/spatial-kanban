@@ -8,6 +8,7 @@ import type { BoardRuntime } from './runtime'
 import { NEW_CARD_ID, type DragEffect } from './drag'
 import { useView } from './viewStore'
 import { toast } from '../ui/toasts'
+import { openSystemKeyboard } from '../xr/systemKeyboard'
 
 const LEAVE_MS = 450
 
@@ -45,6 +46,8 @@ export function beginNewCard(columnId: string, index: number, runtime?: BoardRun
       runtime.animator.delete(NEW_CARD_ID)
     }
   }
+  // In a headset, open the system keyboard now, while we're still inside the user's gesture.
+  if (useView.getState().mode === 'xr') openSystemKeyboard('')
   useView.getState().set({ editCardId: card.id, editIsNew: true, detailCardId: card.id })
   return card
 }
