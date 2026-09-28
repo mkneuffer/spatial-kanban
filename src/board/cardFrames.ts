@@ -6,7 +6,7 @@ import { usePlacements } from '../data/placements'
 import { useSettings } from '../data/settings'
 import type { SkinMotion } from '../skins/types'
 import type { CardAnim, AnimTarget } from './animator'
-import { NEW_CARD_ID, trailVelocity } from './drag'
+import { NEW_CARD_ID, onBoardDragZ, trailVelocity } from './drag'
 import type { BoardLayout, CardSlot } from './layout'
 import { useBoardRuntime } from './runtime'
 import { toLocal } from './space'
@@ -122,15 +122,17 @@ export function useCardFrames<C>(
       if (kind === 'slot') {
         const [cx, cy] = toLocal(r.x + r.w / 2, r.y + r.h / 2, [W, H])
         const pressed = drag.phase === 'pressed' && drag.cardId === id
+        // A pinch or grip picks the card up at once; a ray, poke or click presses it in.
+        const picked = pressed && drag.pointerKind === 'grab'
         target.x = cx
         target.y = cy
-        target.z = slot.z + (hovered ? 0.003 * liftScale : 0)
+        target.z = slot.z + (picked ? motion.liftHeight * liftScale * 0.6 : hovered ? 0.003 * liftScale : 0)
         target.w = r.w
         target.h = r.h
         target.rot = slot.rotation
-        target.scale = pressed ? 0.985 : hovered ? 1.015 : 1
-        target.curl = hovered && motion.peel ? 0.12 : 0
-        lift = hovered ? 0.25 : 0
+        target.scale = picked ? motion.dragScale : pressed ? 0.985 : hovered ? 1.015 : 1
+        target.curl = (hovered || picked) && motion.peel ? (picked ? 0.5 : 0.12) : 0
+        lift = picked ? 0.7 : hovered ? 0.25 : 0
         clipMax = H / 2 - slot.clip[0]
         clipMin = H / 2 - slot.clip[1]
       } else if (kind === 'drag' || kind === 'new') {
@@ -140,7 +142,7 @@ export function useCardFrames<C>(
         const free3d = drag.phase === 'dragFree'
         target.x = cx
         target.y = cy
-        target.z = free3d ? p.z : motion.liftHeight * liftScale
+        target.z = free3d ? p.z : onBoardDragZ(drag.pointerKind, p.z, motion.liftHeight * liftScale)
         target.w = size[0]
         target.h = size[1]
         const tilt = Math.max(-0.3, Math.min(0.3, -velocity[0] * motion.dragTilt))
