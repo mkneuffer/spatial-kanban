@@ -39,7 +39,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 
 | Action | Hands / controllers | Phone AR | Desktop 3D | 2D board |
 |---|---|---|---|---|
-| Pick up / move | Pinch or trigger on a card (ray), or grab nearby (grip) | Touch drag | Mouse drag | Drag, or Space then arrow keys |
+| Pick up / move | Near: pinch the card, or poke and slide it with a fingertip. Far: pinch or trigger along the ray. Controllers: squeeze near a card | Touch drag | Mouse drag | Drag, or Space then arrow keys |
 | Card details | Quick tap (< 300 ms, < 1 cm) | Tap | Click | Click / Enter |
 | Tear off, park in the room | Grab and pull > 12 cm off the board | – | – | – |
 | Return a parked card | Drag it back onto the board | – | Details → Return to board | Details → Return to board |
@@ -125,6 +125,18 @@ A skin never creates one mesh per card. Per frame, a shared driver (`board/cardF
 
 Invisible per-card hit proxies take pointer events, so hands (sphere intersection), pokes and rays all work the same way.
 
+### Hands
+
+Tracked hands use the ProtoGen **Meta Dark v6** look (`xr/hands/metaDarkV6.ts`, ported from the ProtoGen WebXR Template's `xr-hands.js`): a translucent near-black toon body that fades out toward the wrist, with a white inverted-hull outline. The generic-hand skeletons are self-hosted in `public/webxr-profiles/generic-hand/`, so hands also load offline.
+
+`xr/hands/KanbanHand.tsx` replaces the pmndrs default hand with three pointers, and the nearest hit wins:
+
+- **Pinch grab** sits at the midpoint between the thumb and index tips, where the fingers actually close (5 cm reach). A pinched card lifts at once and stays in the fingers: it rises with the hand until it tears off at 12 cm.
+- **Poke** sits at the index tip. It presses only when the fingertip reaches the surface from the front, and releases after a 2 cm lift, so a finger sliding along the board doesn't drop the card. It turns off while a pinch is forming (thumb near index), so reaching in to pinch never pokes by accident. In the pmndrs default, grab and poke shared the fingertip and grab won every tie, so poke never fired.
+- **Ray** handles everything beyond about 10 cm.
+
+Thresholds live in `xr/hands/nearField.ts` and are unit tested. Controllers keep their models; a squeeze-grab holds the card in the hand the same way a pinch does.
+
 ### Project layout
 
 ```
@@ -134,7 +146,7 @@ src/
   board/        space math, layout types, drag reducer, animator, card driver, interaction
   skins/        skin interface, registry, projects/, whiteboard/
   render/       chips, paper, shadows, text batches, marker strokes, fonts
-  xr/           session store, capabilities, anchors, surfaces, placement/, handles, phone HUD, emulator
+  xr/           session store, capabilities, anchors, surfaces, placement/, hands/, handles, phone HUD, emulator
   ui/           flat/ (2D board, drawer, dialogs), xr/ (3D panels, keyboard), toasts
   fx/           procedural WebAudio sounds, haptics
 tests/unit/     ordering, store, layout (both skins), drag, snapping, persistence
