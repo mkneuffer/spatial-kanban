@@ -123,18 +123,30 @@ Labels, assignees and due dates come from the tool and are read-only on a synced
 
 ### Setting it up
 
-1. **Deploy the Worker.** `npx wrangler login`, then `npm run deploy`. The first deploy creates the D1 database. If `wrangler d1 migrations apply` can't find it, run `npx wrangler d1 create spatial-kanban` and add the printed `database_id` to `wrangler.jsonc`.
-2. **Set the encryption key:** `openssl rand -base64 32 | npx wrangler secret put TOKEN_ENCRYPTION_KEY`.
-3. **Register an app with each tool you want.** Skip any you don't use; tools without credentials aren't offered. The callback URL is `https://<your-worker>/api/auth/<tool>/callback`.
+The backend runs either on your **Cloudflare Pages** project (the `functions/` folder hands `/api/*` to the Worker code) or as a standalone **Worker** (`wrangler.jsonc`). Pick one.
+
+**On Cloudflare Pages (Git-connected, builds on every push):**
+
+1. In the Cloudflare dashboard, create a D1 database named `spatial-kanban`. In its **Console**, run the SQL in `worker/migrations/0001_init.sql`.
+2. In the Pages project, go to **Settings → Bindings** and add a *D1 database* binding named `DB` pointing to that database.
+3. In **Settings → Variables and Secrets** (Production), add `TOKEN_ENCRYPTION_KEY` (any long random string, e.g. from `openssl rand -base64 32`) and the secrets for the tools you want (below).
+4. Redeploy, since bindings apply to new deployments. Callback URLs use your Pages domain, e.g. `https://spatial-kanban.pages.dev/api/auth/github/callback`.
+
+**As a standalone Worker:**
+
+1. `npx wrangler login`, then `npm run deploy`. The first deploy creates the D1 database. If `wrangler d1 migrations apply` can't find it, run `npx wrangler d1 create spatial-kanban` and add the printed `database_id` to `wrangler.jsonc`.
+2. Set the encryption key: `openssl rand -base64 32 | npx wrangler secret put TOKEN_ENCRYPTION_KEY`, and set each tool's secrets with `npx wrangler secret put NAME`.
+
+**Then, either way, register an app with each tool you want.** Skip any you don't use; tools without credentials aren't offered. The callback URL is `https://<your-site>/api/auth/<tool>/callback`.
 
 | Tool | Where | Callback / settings | Secrets |
 |---|---|---|---|
 | GitHub | [Developer settings → OAuth Apps](https://github.com/settings/developers) | Authorization callback URL: `…/api/auth/github/callback` | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (optional `GITHUB_SCOPES`, default `read:user read:org project repo`) |
-| Trello | [Power-Up admin](https://trello.com/power-ups/admin) → API key | Add your Worker's origin to the key's allowed origins | `TRELLO_API_KEY` |
+| Trello | [Power-Up admin](https://trello.com/power-ups/admin) → API key | Add your site's origin to the key's allowed origins | `TRELLO_API_KEY` |
 | Linear | Linear → Settings → API → OAuth applications | Callback URL: `…/api/auth/linear/callback` | `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET` |
 | Jira | [Atlassian developer console](https://developer.atlassian.com/console/myapps/) → OAuth 2.0 integration | Callback URL: `…/api/auth/jira/callback`. Permissions: Jira API (`read:jira-work`, `write:jira-work`, `read:jira-user`) and User identity API (`read:me`) | `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET` |
 
-Set each with `npx wrangler secret put NAME`. Organizations that restrict OAuth apps on GitHub must approve the app before their projects appear.
+Organizations that restrict OAuth apps on GitHub must approve the app before their projects appear.
 
 **Locally:** copy `.dev.vars.example` to `.dev.vars` and fill in what you need. Then either run `npm run worker:dev` and open http://localhost:8787, or keep Vite's hot reload with `npm run worker:dev` in one terminal and `npm run dev:sync` in another (set `PUBLIC_URL=http://localhost:5173` so OAuth comes back to Vite). Register a separate OAuth app per tool for local development, with `http://localhost:…` callback URLs.
 
@@ -195,6 +207,7 @@ src/
   fx/           procedural WebAudio sounds, haptics
   integrations/ wire protocol, three-way sync planner, sync engine, API client
 worker/         Cloudflare Worker: static assets + /api (OAuth, sessions, provider adapters), D1 migrations
+functions/      Cloudflare Pages Functions entry: hands /api/* to the Worker handler
 tests/unit/     ordering, store, layout (both skins), drag, snapping, persistence, sync planner, sync engine
 tests/worker/   Worker API end to end (D1 on node:sqlite, mocked providers), provider mappings
 ```

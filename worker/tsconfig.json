@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "../src/integrations/protocol.ts", "../src/data/model.ts", "../tests/worker"]
+  "include": ["src", "../functions", "../src/integrations/protocol.ts", "../src/data/model.ts", "../tests/worker"]
 }
