@@ -5,6 +5,7 @@ import { useView, type ViewMode } from '../board/viewStore'
 import { unlockAudio } from '../fx/audio'
 import { detectSessionCapabilities, EMPTY_SESSION_CAPS, type SessionCapabilities } from './capabilities'
 import { attachSessionLifecycle, listenForPageVisibility, releaseForBackground } from './lifecycle'
+import { KanbanHand } from './hands/KanbanHand'
 
 /**
  * The XR store (pmndrs/xr). Everything optional so the session starts on the
@@ -26,7 +27,8 @@ export const xrStore = createXRStore({
   bodyTracking: false,
   frameRate: 'high',
   foveation: 0.5,
-  hand: { teleportPointer: false, rayPointer: true, grabPointer: true, touchPointer: true },
+  // Meta Dark v6 hands with pinch-point grab and a working fingertip poke (see ./hands).
+  hand: KanbanHand,
   controller: { teleportPointer: false, rayPointer: true, grabPointer: true },
 })
 
