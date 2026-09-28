@@ -7,8 +7,11 @@
   "scripts": {
     "dev": "vite",
     "dev:https": "vite --mode https",
+    "dev:sync": "vite --mode sync",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "worker:dev": "vite build && wrangler d1 migrations apply spatial-kanban --local && wrangler dev --port 8787",
+    "deploy": "vite build && wrangler deploy && wrangler d1 migrations apply spatial-kanban --remote",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -33,6 +36,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260928.1",
     "@iwer/devui": "^2.5.0",
     "@iwer/sem": "^2.5.0",
     "@types/node": "^26.6.3",
@@ -46,7 +50,8 @@
     "iwer": "^2.5.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "^4.142.0"
   },
   "engines": {
     "node": ">=22"

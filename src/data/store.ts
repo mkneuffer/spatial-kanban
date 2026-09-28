@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { enablePatches, produceWithPatches, applyPatches, type Patch } from 'immer'
-import { applyAction, isUndoable, type BoardAction } from './actions'
+import { applyAction, clearsHistory, isUndoable, type BoardAction } from './actions'
 import type { BoardDoc, Card, ID } from './model'
 import { cardsInColumn, keyForIndex } from './ordering'
 import { createDemoBoard, newCard } from './seed'
@@ -35,7 +35,8 @@ export interface BoardState {
   archiveCard(cardId: ID, archived?: boolean): void
 }
 
-type Listener = (patches: Patch[], doc: BoardDoc) => void
+/** `action` is undefined for undo and redo. */
+type Listener = (patches: Patch[], doc: BoardDoc, action?: BoardAction) => void
 const patchListeners = new Set<Listener>()
 
 /** Subscribe to committed patches (persistence, future sync). */
@@ -55,13 +56,15 @@ export const useBoardStore = create<BoardState>()((set, get) => ({
     const { doc } = get()
     const [next, patches, inverse] = produceWithPatches(doc, (draft) => applyAction(draft, action, new Date().toISOString()))
     if (patches.length === 0) return
+    const undoable = isUndoable(action)
+    const clear = clearsHistory(action)
     set((s) => ({
       doc: next,
       revision: s.revision + 1,
-      past: isUndoable(action) ? [...s.past, { action: action.type, patches, inverse }].slice(-HISTORY_LIMIT) : [],
-      future: [],
+      past: undoable ? [...s.past, { action: action.type, patches, inverse }].slice(-HISTORY_LIMIT) : clear ? [] : s.past,
+      future: undoable || clear ? [] : s.future,
     }))
-    for (const fn of patchListeners) fn(patches, next)
+    for (const fn of patchListeners) fn(patches, next, action)
   },
 
   undo() {

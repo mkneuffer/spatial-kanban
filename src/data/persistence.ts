@@ -29,8 +29,8 @@ export class KanbanDB extends Dexie {
   }
 }
 
-export async function loadDoc(db: KanbanDB): Promise<BoardDoc | null> {
-  const lastId = (await db.kv.get('lastBoardId'))?.value as string | undefined
+export async function loadDoc(db: KanbanDB, boardId?: string): Promise<BoardDoc | null> {
+  const lastId = boardId ?? ((await db.kv.get('lastBoardId'))?.value as string | undefined)
   const board = (lastId && (await db.boards.get(lastId))) || (await db.boards.toCollection().first())
   if (!board) return null
   const [columns, cards] = await Promise.all([
@@ -43,7 +43,10 @@ export async function loadDoc(db: KanbanDB): Promise<BoardDoc | null> {
   return { board, columns: columnMap, cards: Object.fromEntries(cards.map((c) => [c.id, c])) }
 }
 
-export async function saveDocFull(db: KanbanDB, doc: BoardDoc): Promise<void> {
+/** Extra key/value rows written in the same transaction as the board (e.g. its sync state). */
+export type KVWrites = Map<string, unknown>
+
+export async function saveDocFull(db: KanbanDB, doc: BoardDoc, kv?: KVWrites): Promise<void> {
   await db.transaction('rw', db.boards, db.columns, db.cards, db.kv, async () => {
     await Promise.all([
       db.columns.where('boardId').equals(doc.board.id).delete(),
@@ -53,6 +56,7 @@ export async function saveDocFull(db: KanbanDB, doc: BoardDoc): Promise<void> {
     await db.columns.bulkPut(Object.values(doc.columns))
     await db.cards.bulkPut(Object.values(doc.cards))
     await db.kv.put({ key: 'lastBoardId', value: doc.board.id })
+    if (kv?.size) await db.kv.bulkPut([...kv].map(([key, value]) => ({ key, value })))
   })
 }
 
@@ -79,9 +83,10 @@ export function collectDirty(patches: Patch[], into: DirtySet = emptyDirty()): D
   return into
 }
 
-export async function saveDirty(db: KanbanDB, doc: BoardDoc, dirty: DirtySet): Promise<void> {
-  if (dirty.full) return saveDocFull(db, doc)
-  await db.transaction('rw', db.boards, db.columns, db.cards, async () => {
+export async function saveDirty(db: KanbanDB, doc: BoardDoc, dirty: DirtySet, kv?: KVWrites): Promise<void> {
+  if (dirty.full) return saveDocFull(db, doc, kv)
+  await db.transaction('rw', db.boards, db.columns, db.cards, db.kv, async () => {
+    if (kv?.size) await db.kv.bulkPut([...kv].map(([key, value]) => ({ key, value })))
     if (dirty.board) await db.boards.put(doc.board)
     for (const id of dirty.cards) {
       const card = doc.cards[id]
@@ -93,6 +98,33 @@ export async function saveDirty(db: KanbanDB, doc: BoardDoc, dirty: DirtySet): P
       if (column) await db.columns.put(column)
       else await db.columns.delete(id)
     }
+  })
+}
+
+export interface BoardSummary {
+  id: string
+  title: string
+  updatedAt: string
+  integration?: Board['integration']
+}
+
+export async function listBoards(db: KanbanDB): Promise<BoardSummary[]> {
+  const boards = await db.boards.toArray()
+  return boards
+    .map(({ id, title, updatedAt, integration }) => ({ id, title, updatedAt, integration }))
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+}
+
+/** Removes a board with its cards, columns, placements and sync state. */
+export async function deleteBoardData(db: KanbanDB, boardId: string): Promise<void> {
+  await db.transaction('rw', [db.boards, db.columns, db.cards, db.placements, db.kv], async () => {
+    await Promise.all([
+      db.boards.delete(boardId),
+      db.columns.where('boardId').equals(boardId).delete(),
+      db.cards.where('boardId').equals(boardId).delete(),
+      db.placements.filter((p) => p.boardId === boardId).delete(),
+      db.kv.delete(`sync:${boardId}`),
+    ])
   })
 }
 

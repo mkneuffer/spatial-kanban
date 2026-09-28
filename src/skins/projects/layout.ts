@@ -1,4 +1,4 @@
-import type { BoardDoc, Card, ID } from '../../data/model'
+import { cardRef, type BoardDoc, type Card, type ID } from '../../data/model'
 import {
   columnCards,
   columnSlot,
@@ -86,7 +86,7 @@ export function projectsCardContent(card: Card, doc: BoardDoc, width: number, M:
     x: width - M.cardPad - M.avatarD / 2 - (arr.length - 1 - i) * M.avatarD * 0.7,
     y: M.cardPad + refRowH / 2,
   }))
-  const ref = card.number !== undefined ? `#${card.number}` : ''
+  const ref = cardRef(card)
 
   const lines = wrapText(card.title || 'Untitled', innerW, measure, 'Inter', M.titleSize, 3, 500)
   const titleY = M.cardPad + refRowH + 0.006 * (M.titleSize / 0.0165)

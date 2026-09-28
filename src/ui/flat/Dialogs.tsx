@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useBoardStore } from '../../data/store'
 import { byOrderKey } from '../../data/ordering'
+import { cardRef } from '../../data/model'
 
-function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+export function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null
@@ -29,6 +30,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
   return (
     <Dialog title="Controls & help" onClose={onClose}>
       <p>The same board works everywhere. Changes save on this device automatically.</p>
+      <p>Keep several boards, or sync one with GitHub Projects, Trello, Linear or Jira, from ⋯ → Boards & integrations.</p>
       <strong>Mixed reality (Meta Quest, Android AR)</strong>
       <ul>
         <li>Enter AR, choose Wall, Desk or Float, then pinch / pull the trigger / tap to place.</li>
@@ -67,7 +69,7 @@ export function ArchivedDialog({ onClose }: { onClose(): void }) {
           {archived.map((c) => (
             <div key={c.id} className="row">
               <span>
-                {c.number ? `#${c.number} ` : ''}
+                {cardRef(c) ? `${cardRef(c)} ` : ''}
                 {c.title}
               </span>
               <button className="btn" onClick={() => useBoardStore.getState().archiveCard(c.id, false)}>

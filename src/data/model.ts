@@ -12,7 +12,18 @@ export interface Board {
   labels: Label[]
   createdAt: string
   updatedAt: string
-  integration?: { kind: 'github-project'; projectId: string; statusFieldId: string }
+  /** Set when the board mirrors a board in an online tool (GitHub Projects, Trello, …). */
+  integration?: BoardIntegration
+}
+
+export type ProviderId = 'github' | 'trello' | 'linear' | 'jira'
+
+export interface BoardIntegration {
+  provider: ProviderId
+  /** The remote board's id: a GitHub project node id, Trello board id, Linear team id, or `cloudId/PROJECT` for Jira. */
+  remoteId: string
+  name: string
+  url?: string
 }
 
 export interface Column {
@@ -21,7 +32,8 @@ export interface Column {
   title: string
   color?: string
   wipLimit?: number
-  externalOptionId?: string // e.g. GitHub single-select option id
+  /** Remote column id when the board is linked: a GitHub Status option, Trello list, Linear or Jira status. */
+  externalId?: string
 }
 
 export interface Card {
@@ -38,13 +50,24 @@ export interface Card {
   archived: boolean
   /** Short human reference shown on the card, e.g. 101 → "#101". */
   number?: number
-  externalRef?: { kind: 'github-issue'; url: string; number: number }
+  /** The remote item this card mirrors, when the board is linked. */
+  externalRef?: ExternalRef
   skinData?: {
     // presentation hints, namespaced per skin
     sticky?: { offset?: [number, number]; rotation?: number }
   }
   createdAt: string
   updatedAt: string
+}
+
+export interface ExternalRef {
+  provider: ProviderId
+  id: string
+  url?: string
+  /** Human reference shown instead of `#number`, e.g. "ENG-12" or "owner/repo#42". */
+  key?: string
+  /** Provider-specific data the backend needs to update the item (e.g. GitHub content id). */
+  meta?: Record<string, string>
 }
 
 export interface Label {
@@ -108,3 +131,9 @@ export interface FreeCardPlacement {
 }
 
 export const IDENTITY_POSE: Pose = { position: [0, 0, 0], quaternion: [0, 0, 0, 1] }
+
+/** The short reference shown on a card: the remote key when linked, otherwise the local number. */
+export function cardRef(card: Pick<Card, 'number' | 'externalRef'>): string {
+  if (card.externalRef) return card.externalRef.key ?? ''
+  return card.number !== undefined ? `#${card.number}` : ''
+}

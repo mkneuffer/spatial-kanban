@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Person } from '../../data/model'
+import { cardRef, type Person } from '../../data/model'
 import { useBoardStore } from '../../data/store'
 import { cardsInColumn } from '../../data/ordering'
 import { DEMO_PEOPLE } from '../../data/seed'
@@ -9,6 +9,7 @@ import { archiveWithAnimation } from '../../board/effects'
 import { STICKY_COLORS } from '../../skins/whiteboard/palette'
 import { pillBg, pillText } from '../../skins/projects/palette'
 import { initials } from '../../skins/projects/layout'
+import { PROVIDER_NAMES } from '../../integrations/protocol'
 import { toast } from '../toasts'
 import { Icon, LabelGlyph } from './icons'
 
@@ -97,6 +98,9 @@ export function CardDrawer({ dark }: { dark: boolean }) {
 
   const people = [...DEMO_PEOPLE, ...card.assignees.filter((a) => !DEMO_PEOPLE.some((p) => p.id === a.id))]
   const column = doc.columns[card.columnId]
+  // Labels, assignees and due dates of a synced card come from the online tool.
+  const tool = card.externalRef && doc.board.integration?.provider === card.externalRef.provider ? PROVIDER_NAMES[card.externalRef.provider] : null
+  const managed = tool ? <span className="managed">From {tool}</span> : null
 
   return (
     <>
@@ -105,17 +109,22 @@ export function CardDrawer({ dark }: { dark: boolean }) {
         className="drawer"
         role="dialog"
         aria-modal="true"
-        aria-label={`Card ${card.number ? `#${card.number}` : ''} details`}
+        aria-label={`Card ${cardRef(card)} details`}
         tabIndex={-1}
         ref={drawerRef}
 >
         <header>
           <span className="ring" style={{ color: column?.color, width: 12, height: 12, borderRadius: '50%', border: '2px solid currentColor', display: 'inline-block' }} />
           <span>
-            {card.number ? `#${card.number}` : 'Card'} · {column?.title}
+            {cardRef(card) || 'Card'} · {column?.title}
             {parked ? ' · parked in the room' : ''}
           </span>
           <span className="grow" />
+          {tool && card.externalRef?.url && (
+            <a className="btn ghost" href={card.externalRef.url} target="_blank" rel="noreferrer">
+              <Icon name="external" /> Open in {tool}
+            </a>
+          )}
           <button className="btn ghost icon" aria-label="Close" onClick={close}>
             <Icon name="close" />
           </button>
@@ -151,13 +160,14 @@ export function CardDrawer({ dark }: { dark: boolean }) {
             </select>
           </label>
           <div className="field">
-            <span>Labels</span>
+            <span>Labels {managed}</span>
             <div className="chips">
-              {doc.board.labels.map((l) => (
+              {(tool ? doc.board.labels.filter((l) => card.labelIds.includes(l.id)) : doc.board.labels).map((l) => (
                 <button
                   key={l.id}
                   className="pill chip-toggle"
                   aria-pressed={card.labelIds.includes(l.id)}
+                  disabled={!!tool}
                   style={{ background: pillBg(l.color, dark), color: pillText(l.color, dark) }}
                   onClick={() => toggleLabel(l.id)}
                 >
@@ -168,10 +178,11 @@ export function CardDrawer({ dark }: { dark: boolean }) {
             </div>
           </div>
           <div className="field">
-            <span>Assignees</span>
+            <span>Assignees {managed}</span>
             <div className="chips">
-              {people.map((p) => (
-                <button key={p.id} className="pill chip-toggle" aria-pressed={card.assignees.some((a) => a.id === p.id)} onClick={() => toggleAssignee(p)}>
+              {tool && card.assignees.length === 0 && <span className="managed">Nobody</span>}
+              {(tool ? card.assignees : people).map((p) => (
+                <button key={p.id} className="pill chip-toggle" aria-pressed={card.assignees.some((a) => a.id === p.id)} disabled={!!tool} onClick={() => toggleAssignee(p)}>
                   <span className="avatar" style={{ background: p.color ?? '#6e7781', width: 18, height: 18, margin: 0, fontSize: 8, border: 0 }} aria-hidden="true">
                     {initials(p.name)}
                   </span>
@@ -181,10 +192,11 @@ export function CardDrawer({ dark }: { dark: boolean }) {
             </div>
           </div>
           <label className="field">
-            <span>Due date</span>
+            <span>Due date {managed}</span>
             <input
               type="date"
               value={card.dueDate ?? ''}
+              readOnly={!!tool}
               onChange={(e) => dispatch({ type: 'card/update', id: card.id, changes: { dueDate: e.target.value || undefined } })}
             />
           </label>

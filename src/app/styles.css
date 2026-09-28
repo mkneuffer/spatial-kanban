@@ -177,6 +177,13 @@ textarea {
   font-size: 15px;
   text-overflow: ellipsis;
 }
+/* Hug the title so the sync pill sits right after it. */
+@supports (field-sizing: content) {
+  .board-title input {
+    width: auto;
+    field-sizing: content;
+  }
+}
 .board-title input:hover {
   border-color: var(--border);
 }
@@ -897,6 +904,164 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ——— Boards & integrations ——— */
+
+a.btn {
+  text-decoration: none;
+  color: inherit;
+}
+a.btn.primary {
+  color: var(--accent-fg);
+}
+
+.dialog h3 {
+  margin: 18px 0 8px;
+  font-size: 14px;
+}
+.dialog .hint {
+  font-size: 13px;
+  margin-top: 12px;
+}
+.dialog .muted,
+.managed {
+  color: var(--muted);
+  font-weight: 400;
+}
+.managed {
+  font-size: 12px;
+  margin-left: 4px;
+}
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  vertical-align: 1px;
+}
+.archived-list .row .current {
+  flex: none;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 8px;
+}
+.linked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+}
+.linked[data-status='error'],
+.linked[data-status='needs-auth'] {
+  background: var(--warn-soft);
+}
+.linked > div:first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.linked .muted {
+  font-size: 13px;
+  margin-top: 2px;
+}
+.linked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.picker {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.picker-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+}
+.picker-group .label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+.picker-item {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.picker-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.picker-item:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+.picker-item .muted {
+  flex: none;
+  font-size: 12px;
+}
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sync-pill:hover {
+  background: var(--bg-hover);
+}
+.sync-pill[data-status='synced'] svg {
+  color: var(--success);
+}
+.sync-pill[data-status='syncing'] svg {
+  color: var(--accent);
+  animation: spin 1s linear infinite;
+}
+.sync-pill[data-status='error'],
+.sync-pill[data-status='needs-auth'] {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-pill[data-status='syncing'] svg {
+    animation: none;
+  }
+}
+.chip-toggle:disabled {
+  cursor: default;
 }
 
 /* ——— Toasts ——— */
