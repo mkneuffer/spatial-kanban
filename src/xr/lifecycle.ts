@@ -39,8 +39,8 @@ export function releaseForBackground() {
   }
   // Input sources disappear while the system menu is up and never send pointerup: drop any drag.
   const view = useView.getState()
+  // (The board clears its per-pointer hover state through its own onXRBackground stopper.)
   if (view.drag.phase !== 'idle' || view.columnDrag) view.set({ drag: IDLE, columnDrag: null })
-  view.set({ hoverCardId: null, hoverColumnId: null })
   const active = document.activeElement
   if (active instanceof HTMLElement) active.blur()
   pauseAudio()

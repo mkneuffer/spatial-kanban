@@ -8,10 +8,21 @@ import { rectContains, type V3 } from './space'
  *
  *   Idle → Pressed → (tap) Detail
  *                  → DragOnBoard ⇄ DragFree → release → commit / park / archive
+ *
+ * Parked (free) cards also start in Pressed, and go straight to DragFree once
+ * they move past the tap slop.
  */
 
 export const TAP_MAX_MS = 300 // PLAN says 150 ms; pinches on Quest routinely take longer.
 export const TAP_MAX_DIST = 0.01
+/**
+ * Angular tap slop for pointers that aim from a distance (radians). A far ray
+ * sweeps centimetres across the board from hand tremor or the pinch itself, so
+ * a fixed 1 cm makes taps at arm's length unreliable.
+ */
+export const RAY_SLOP_RAD = 0.02
+export const MOUSE_SLOP_RAD = 0.005
+export const MAX_TAP_SLOP = 0.06
 export const TEAR_OFF_DIST = 0.12
 export const REATTACH_DIST = 0.06
 export const COLUMN_HYSTERESIS = 0.02
@@ -45,6 +56,8 @@ export interface DragState {
   overBin: boolean
   /** Recent points for throw velocity. */
   trail: DragPoint[]
+  /** Movement (m, board space) below which a press is still a tap. */
+  slop: number
 }
 
 export const IDLE: DragState = {
@@ -60,6 +73,7 @@ export const IDLE: DragState = {
   targetIndex: null,
   overBin: false,
   trail: [],
+  slop: TAP_MAX_DIST,
 }
 
 export type DragEffect =
@@ -92,6 +106,8 @@ export type DragEvent =
       point: DragPoint
       /** Center of the card in board space (u, v) at press time. */
       cardCenter: [number, number]
+      /** Tap / drag-start threshold for this press (see tapSlop). Defaults to TAP_MAX_DIST. */
+      slop?: number
     }
   | { type: 'move'; pointerId: number; point: DragPoint }
   | { type: 'up'; pointerId: number; point: DragPoint }
@@ -108,16 +124,55 @@ export function canTearOff(kind: PointerKind): boolean {
 }
 
 /**
+ * How far (board-space meters) a press may wander and still count as a tap.
+ * Direct pointers (grab, poke) use a fixed distance; rays and the mouse scale
+ * with the distance from the pointer origin to the board, i.e. a fixed angle.
+ */
+export function tapSlop(kind: PointerKind, distance: number): number {
+  const d = Number.isFinite(distance) ? Math.max(0, distance) : 0
+  switch (kind) {
+    case 'ray':
+      return Math.min(MAX_TAP_SLOP, Math.max(TAP_MAX_DIST, d * RAY_SLOP_RAD))
+    case 'mouse':
+      return Math.min(0.04, Math.max(0.004, d * MOUSE_SLOP_RAD))
+    case 'screen':
+      return Math.min(0.05, Math.max(0.008, d * MOUSE_SLOP_RAD * 2))
+    default:
+      return TAP_MAX_DIST
+  }
+}
+
+/**
  * How far off the board a card dragged along it sits (board-local z, m).
  * - grab (pinch, grip): the card stays in the hand, rising with it until it tears off,
  *   so a direct grab never leaves the card behind on the board.
  * - touch (poke): the card stays just under the fingertip instead of floating in front of it.
  * - ray / mouse / screen: the skin's fixed lift.
  */
-export function onBoardDragZ(kind: PointerKind, pointerZ: number, lift: number): number {
-  if (kind === 'grab') return Math.min(TEAR_OFF_DIST, Math.max(lift, pointerZ))
+export function onBoardDragZ(kind: PointerKind, pointerZ: number, lift: number, tearAt = TEAR_OFF_DIST): number {
+  if (kind === 'grab') return Math.min(tearAt, Math.max(lift, pointerZ))
   if (kind === 'touch') return Math.min(lift, 0.004)
   return lift
+}
+
+/**
+ * Pointer height (board-local z) at which a card dragged along the board tears off.
+ * Measured from where it was grabbed: a grab sphere picks cards up from several
+ * centimetres away (5 cm pinch, 7 cm controller grip), which must not count toward
+ * the pull. A card that came off the board (parked) measures from the board itself.
+ */
+export function tearOffHeight(state: Pick<DragState, 'source' | 'start'>): number {
+  const base = state.source === 'board' && state.start ? Math.max(0, state.start.z) : 0
+  return base + TEAR_OFF_DIST
+}
+
+/**
+ * Tap distance. A poke presses a few millimetres from the surface and releases
+ * up to 2 cm off it, so its depth change is part of every tap: measure in the
+ * board plane only. Other pointers measure in 3D.
+ */
+function tapDistance(kind: PointerKind, a: DragPoint, b: DragPoint): number {
+  return kind === 'touch' ? Math.hypot(a.u - b.u, a.v - b.v) : dist2(a, b)
 }
 
 /**
@@ -183,7 +238,8 @@ export function dragReducer<C>(state: DragState, event: DragEvent, ctx: DragCont
     const p = event.point
     const next: DragState = {
       ...IDLE,
-      phase: event.source === 'free' ? 'dragFree' : 'pressed',
+      // Parked cards start as a press too, so a tap on one opens its details.
+      phase: 'pressed',
       pointerId: event.pointerId,
       pointerKind: event.pointerKind,
       cardId: event.cardId,
@@ -192,9 +248,7 @@ export function dragReducer<C>(state: DragState, event: DragEvent, ctx: DragCont
       current: p,
       grabOffset: [event.cardCenter[0] - p.u, event.cardCenter[1] - p.v],
       trail: [p],
-    }
-    if (event.source === 'free') {
-      effects.push({ type: 'sound', name: 'pick' }, { type: 'haptic', strength: 'tick' })
+      slop: event.slop ?? TAP_MAX_DIST,
     }
     return { state: next, effects }
   }
@@ -211,12 +265,12 @@ export function dragReducer<C>(state: DragState, event: DragEvent, ctx: DragCont
   if (event.type === 'move') {
     let next: DragState = { ...state, current: p, trail }
     if (state.phase === 'pressed') {
-      if (dist2(p, state.start!) <= TAP_MAX_DIST) return { state: next, effects }
-      next = { ...next, phase: 'dragOnBoard' }
+      if (tapDistance(state.pointerKind, p, state.start!) <= state.slop) return { state: next, effects }
+      next = { ...next, phase: state.source === 'free' ? 'dragFree' : 'dragOnBoard' }
       effects.push({ type: 'sound', name: 'pick' }, { type: 'haptic', strength: 'tick' })
     }
     const tearable = canTearOff(state.pointerKind) && state.source !== 'pad'
-    if (next.phase === 'dragOnBoard' && tearable && p.z > TEAR_OFF_DIST) {
+    if (next.phase === 'dragOnBoard' && tearable && p.z > tearOffHeight(state)) {
       next = { ...next, phase: 'dragFree', targetColumnId: null, targetIndex: null, overBin: false }
       effects.push({ type: 'sound', name: 'tear' }, { type: 'haptic', strength: 'firm' })
       return { state: next, effects }
@@ -246,7 +300,7 @@ export function dragReducer<C>(state: DragState, event: DragEvent, ctx: DragCont
   const done = (fx: DragEffect[]): DragResult => ({ state: IDLE, effects: fx })
 
   if (state.phase === 'pressed') {
-    const quick = p.t - state.start!.t <= TAP_MAX_MS && dist2(p, state.start!) <= TAP_MAX_DIST
+    const quick = p.t - state.start!.t <= TAP_MAX_MS && tapDistance(state.pointerKind, p, state.start!) <= state.slop
     if (!quick) return done([{ type: 'cancel' }])
     if (state.source === 'pad') return done([{ type: 'padTap' }])
     return done(cardId ? [{ type: 'detail', cardId }] : [{ type: 'cancel' }])

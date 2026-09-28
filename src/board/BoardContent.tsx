@@ -10,9 +10,10 @@ import type { AnySkin } from '../skins/types'
 import { BoardInteraction } from './BoardInteraction'
 import { BoardEffects } from './fx'
 import type { BoardLayout, DragGap, LayoutOptions } from './layout'
-import { BoardRuntimeContext, createRuntime } from './runtime'
+import { BoardRuntimeContext, createRuntime, type BoardRuntime } from './runtime'
 import { canvasMeasure } from './text'
 import { SKIN_SWITCH_MS, useView } from './viewStore'
+import { registerPointerFocus } from '../voice/focus'
 
 interface Props {
   size: [number, number]
@@ -50,6 +51,15 @@ function useLayouts(skin: AnySkin | null, size: [number, number], dragGap: DragG
  */
 export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Props) {
   const runtime = useMemo(() => createRuntime(canvasMeasure), [])
+  // Voice commands resolve "it" and the default column from what a pointer is over.
+  useEffect(
+    () =>
+      registerPointerFocus(() => ({
+        cardId: [...runtime.hoverCards.values()].at(-1) ?? null,
+        columnId: [...runtime.hoverColumns.values()].at(-1)?.columnId ?? null,
+      })),
+    [runtime],
+  )
   const localRoot = useRef<Group>(null)
   const skinId = useSettings((s) => s.skinId)
   const highContrast = useSettings((s) => s.highContrast)
@@ -118,21 +128,19 @@ export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Pro
     const far = tmp.board.distanceTo(tmp.cam) > FAR_DISTANCE * Math.max(0.5, view.k)
     if (far !== runtime.far) runtime.far = far
 
-    if (session && skin.overflow === 'scroll') {
-      const colId = useView.getState().hoverColumnId
-      if (colId) {
-        for (const s of inputs) {
-          if (s.type !== 'controller') continue
-          const axes = s.inputSource.gamepad?.axes
-          const y = axes ? axes[3] ?? 0 : 0
-          if (Math.abs(y) > 0.2) {
-            const col = view.columnById[colId]
-            if (!col) continue
-            const v = useView.getState()
-            const next = Math.max(0, Math.min(col.maxScroll, (v.scroll[colId] ?? 0) + y * dt * 0.35 * view.k))
-            if (next !== v.scroll[colId]) v.setScroll(colId, next)
-          }
-        }
+    // Each controller's thumbstick scrolls the column its own pointer is over.
+    if (session && skin.overflow === 'scroll' && runtime.hoverColumns.size > 0) {
+      for (const s of inputs) {
+        if (s.type !== 'controller') continue
+        const axes = s.inputSource.gamepad?.axes
+        const y = axes ? axes[3] ?? 0 : 0
+        if (Math.abs(y) <= 0.2) continue
+        const colId = hoveredColumnOf(runtime.hoverColumns, s.inputSource)
+        const col = colId ? view.columnById[colId] : undefined
+        if (!colId || !col) continue
+        const v = useView.getState()
+        const next = Math.max(0, Math.min(col.maxScroll, (v.scroll[colId] ?? 0) + y * dt * 0.35 * view.k))
+        if (next !== v.scroll[colId]) v.setScroll(colId, next)
       }
     }
   })
@@ -181,6 +189,11 @@ export function BoardContent({ size, dark, opacity = 1, children, rootRef }: Pro
       </group>
     </BoardRuntimeContext.Provider>
   )
+}
+
+function hoveredColumnOf(hover: BoardRuntime['hoverColumns'], source: XRInputSource): string | null {
+  for (const h of hover.values()) if (h.source === source) return h.columnId
+  return null
 }
 
 function easeOutBack(t: number) {

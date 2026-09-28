@@ -10,6 +10,7 @@ import { onXRBackground } from '../xr/lifecycle'
 import { toast } from '../ui/toasts'
 import { parseCommand, type ParseResult, type VoiceCommand, type VoiceContext } from './commands'
 import { createRecognition, speechSupported, type SpeechRecognitionLike } from './speech'
+import { pointerFocus } from './focus'
 
 interface VoiceState {
   supported: boolean
@@ -33,9 +34,10 @@ const undo = { label: 'Undo', run: () => useBoardStore.getState().undo() }
 /** "It" is the open card, else the one being dragged, pointed at, or used last. */
 export function voiceContext(): VoiceContext {
   const v = useView.getState()
+  const pointer = pointerFocus()
   return {
-    focusCardId: v.detailCardId ?? v.drag.cardId ?? v.hoverCardId ?? useVoice.getState().lastCardId,
-    defaultColumnId: v.hoverColumnId,
+    focusCardId: v.detailCardId ?? v.drag.cardId ?? pointer.cardId ?? useVoice.getState().lastCardId,
+    defaultColumnId: pointer.columnId,
   }
 }
 
@@ -77,7 +79,7 @@ export function runCommand(command: VoiceCommand): ID | null {
       archiveWithAnimation(command.cardId)
       return null
     case 'open':
-      useView.getState().set({ detailCardId: command.cardId })
+      useView.getState().select(command.cardId)
       return command.cardId
     case 'undo':
       if (!store.past.length) toast('Nothing to undo')

@@ -59,6 +59,17 @@ export function rayToPlaneZ(origin: V3, dir: V3, zPlane: number): { x: number; y
   return { x: origin[0] + dir[0] * t, y: origin[1] + dir[1] * t, t }
 }
 
+/**
+ * Clip the span [c - len/2, c + len/2] to [lo, hi]. Returns the visible part's
+ * center and length, or null when nothing is left.
+ */
+export function clipSpan(c: number, len: number, lo: number, hi: number): { c: number; len: number } | null {
+  const a = Math.max(lo, c - len / 2)
+  const b = Math.min(hi, c + len / 2)
+  if (!(b > a)) return null
+  return { c: (a + b) / 2, len: b - a }
+}
+
 export function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x
 }

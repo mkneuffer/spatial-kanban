@@ -26,6 +26,10 @@ export interface BoardRuntime {
   /** Latest gap-free layout for hit testing. */
   baseLayout: BoardLayout | null
   interactive: boolean
+  /** Card under each pointer (pointerId → card id). Several pointers can hover at once. */
+  hoverCards: Map<number, ID>
+  /** Column body under each pointer, with the XR input source behind it (thumbstick scrolling). */
+  hoverColumns: Map<number, { columnId: ID; source: XRInputSource | null }>
   /** Particle effects (no-ops until <BoardEffects> mounts, and under reduced motion). */
   fx: BoardFX
 }
@@ -44,6 +48,8 @@ export function createRuntime(measure: TextMeasure): BoardRuntime {
     measure,
     baseLayout: null,
     interactive: true,
+    hoverCards: new Map(),
+    hoverColumns: new Map(),
     fx: noFX,
   }
 }
