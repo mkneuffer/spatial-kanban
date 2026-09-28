@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { Person } from '../../data/model'
 import { useBoardStore } from '../../data/store'
 import { cardsInColumn } from '../../data/ordering'
@@ -9,6 +9,7 @@ import { archiveWithAnimation } from '../../board/effects'
 import { STICKY_COLORS } from '../../skins/whiteboard/palette'
 import { pillBg, pillText } from '../../skins/projects/palette'
 import { initials } from '../../skins/projects/layout'
+import { dueAfterDeadline } from '../../data/dates'
 import { toast } from '../toasts'
 import { Icon, LabelGlyph } from './icons'
 
@@ -180,14 +181,15 @@ export function CardDrawer({ dark }: { dark: boolean }) {
               ))}
             </div>
           </div>
-          <label className="field">
-            <span>Due date</span>
-            <input
-              type="date"
-              value={card.dueDate ?? ''}
-              onChange={(e) => dispatch({ type: 'card/update', id: card.id, changes: { dueDate: e.target.value || undefined } })}
-            />
-          </label>
+          <div className="field-row">
+            <DateField label="Due date" value={card.dueDate} onChange={(dueDate) => dispatch({ type: 'card/update', id: card.id, changes: { dueDate } })} />
+            <DateField label="Deadline" value={card.deadline} onChange={(deadline) => dispatch({ type: 'card/update', id: card.id, changes: { deadline } })} />
+          </div>
+          {dueAfterDeadline(card) && (
+            <p className="field-hint warn" role="status">
+              The due date is after the deadline.
+            </p>
+          )}
           <div className="field">
             <span>Sticky note color (whiteboard skin)</span>
             <div className="swatches">
@@ -235,5 +237,23 @@ export function CardDrawer({ dark }: { dark: boolean }) {
         </footer>
       </div>
     </>
+  )
+}
+
+/** A date input with a clear button; an empty value clears the date. */
+function DateField({ label, value, onChange }: { label: string; value?: string; onChange(value: string | undefined): void }) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <span className="date-input">
+        <input id={id} type="date" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)} />
+        {value && (
+          <button type="button" className="btn ghost icon" aria-label={`Clear ${label.toLowerCase()}`} onClick={() => onChange(undefined)}>
+            <Icon name="close" />
+          </button>
+        )}
+      </span>
+    </div>
   )
 }
