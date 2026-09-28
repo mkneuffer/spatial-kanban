@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useBoardStore } from '../../data/store'
 import { byOrderKey } from '../../data/ordering'
-import type { LabelIcon } from '../../data/model'
+import { cardRef, type LabelIcon } from '../../data/model'
+import { PROVIDER_NAMES } from '../../integrations/protocol'
 import { LABEL_PRESETS } from '../../data/seed'
 import { ulid } from '../../data/ids'
 import { toast } from '../toasts'
 import { Icon, LabelGlyph } from './icons'
 
-function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+export function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null
@@ -34,6 +35,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
   return (
     <Dialog title="Controls & help" onClose={onClose}>
       <p>The same board works everywhere. Changes save on this device automatically.</p>
+      <p>Keep several boards, or sync one with GitHub Projects, Trello, Linear or Jira, from ⋯ → Boards & integrations.</p>
       <strong>Mixed reality (Meta Quest, Android AR)</strong>
       <ul>
         <li>Enter AR, choose Wall, Desk or Float, then pinch / pull the trigger / tap to place.</li>
@@ -72,7 +74,7 @@ export function ArchivedDialog({ onClose }: { onClose(): void }) {
           {archived.map((c) => (
             <div key={c.id} className="row">
               <span>
-                {c.number ? `#${c.number} ` : ''}
+                {cardRef(c) ? `${cardRef(c)} ` : ''}
                 {c.title}
               </span>
               <button className="btn" onClick={() => useBoardStore.getState().archiveCard(c.id, false)}>
@@ -149,6 +151,9 @@ export function BoardDialog({ onClose }: { onClose(): void }) {
   const cardCount = (columnId: string) => liveCards.filter((c) => c.columnId === columnId).length
   const labelCount = (labelId: string) => Object.values(doc.cards).filter((c) => c.labelIds.includes(labelId)).length
   const undo = { label: 'Undo', run: () => useBoardStore.getState().undo() }
+  // Columns and labels of a synced board that come from the online tool are managed there.
+  const provider = board.integration?.provider
+  const fromTool = provider ? `This comes from ${PROVIDER_NAMES[provider]}. Change it there.` : undefined
 
   const addColumn = () =>
     dispatch({ type: 'column/create', column: { id: ulid(), boardId: board.id, title: 'New column', color: '#8b949e' } })
@@ -207,7 +212,8 @@ export function BoardDialog({ onClose }: { onClose(): void }) {
                 <button
                   className="btn ghost icon danger"
                   aria-label={`Delete ${c.title} (its cards move to the neighbouring column)`}
-                  disabled={ids.length <= 1}
+                  disabled={ids.length <= 1 || !!(provider && c.externalId)}
+                  title={provider && c.externalId ? fromTool : undefined}
                   onClick={() => {
                     const target = ids[i - 1] ?? ids[i + 1]
                     const n = cardCount(id)
@@ -248,6 +254,8 @@ export function BoardDialog({ onClose }: { onClose(): void }) {
                 <button
                   className="btn ghost icon danger"
                   aria-label={`Delete label ${l.name}`}
+                  disabled={!!provider && l.id.startsWith(`${provider}:`)}
+                  title={provider && l.id.startsWith(`${provider}:`) ? fromTool : undefined}
                   onClick={() => {
                     dispatch({ type: 'label/delete', id: l.id })
                     toast(`Deleted label “${l.name}”${n ? ` from ${n} card${n === 1 ? '' : 's'}` : ''}`, { action: undo })

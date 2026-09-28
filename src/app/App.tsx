@@ -17,6 +17,8 @@ import { CardDrawer } from '../ui/flat/CardDrawer'
 import { Icon, Logo } from '../ui/flat/icons'
 import { Toasts } from '../ui/ToastHost'
 import { ArchivedDialog, BoardDialog, HelpDialog } from '../ui/flat/Dialogs'
+import { BoardsDialog, SyncIndicator } from '../ui/flat/BoardsDialog'
+import { useIntegrations } from '../integrations/store'
 import { toast } from '../ui/toasts'
 
 // The 3D/XR scene (three.js, R3F, WebXR) loads after the 2D board has painted.
@@ -47,6 +49,7 @@ export function App() {
   const highContrast = useSettings((s) => s.highContrast)
   const dark = useDarkMode()
   const [dialog, setDialog] = useState<DialogId | null>(null)
+  const boardsOpen = useIntegrations((s) => s.panel.open)
 
   useEffect(() => setSoundEnabled(sound), [sound])
   useEffect(() => setHapticsEnabled(haptics), [haptics])
@@ -93,6 +96,7 @@ export function App() {
       {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
       {dialog === 'archived' && <ArchivedDialog onClose={() => setDialog(null)} />}
       {dialog === 'board' && <BoardDialog onClose={() => setDialog(null)} />}
+      {boardsOpen && <BoardsDialog onClose={() => useIntegrations.getState().closePanel()} />}
       <Toasts />
     </div>
   )
@@ -126,6 +130,7 @@ function TopBar({ onDialog }: { onDialog(d: DialogId): void }) {
           onBlur={() => draft.trim() && draft !== title && useBoardStore.getState().dispatch({ type: 'board/update', changes: { title: draft.trim() } })}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />
+        <SyncIndicator />
       </div>
       <div className="toolbar">
         <div className="seg" role="group" aria-label="View">
@@ -212,9 +217,12 @@ function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
   const importBoard = async (f: File) => {
     try {
       const doc = importDoc(await f.text())
+      // An export of a synced board comes back as a local copy; it never takes over the sync.
+      const wasSynced = !!doc.board.integration
+      delete doc.board.integration
       useBoardStore.getState().dispatch({ type: 'doc/replace', doc })
       usePlacements.getState().hydrate(null, [])
-      toast(`Imported “${doc.board.title}”`, { tone: 'success' })
+      toast(`Imported “${doc.board.title}”${wasSynced ? ' as a local copy' : ''}`, { tone: 'success' })
     } catch (err) {
       toast(`Import failed: ${(err as Error).message}`, { tone: 'warn', ms: 6000 })
     }
@@ -251,6 +259,9 @@ function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
           <hr />
           <button className="item" role="menuitem" onClick={() => (onDialog('board'), setOpen(false))}>
             Edit board, columns & labels…
+          </button>
+          <button className="item" role="menuitem" onClick={() => (useIntegrations.getState().openPanel(), setOpen(false))}>
+            Boards & integrations…
           </button>
           <button className="item" role="menuitem" onClick={() => (onDialog('archived'), setOpen(false))}>
             Archived cards…

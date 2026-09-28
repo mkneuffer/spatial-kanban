@@ -1,0 +1,31 @@
+// Cloudflare Worker: serves the built app from dist/ and the optional
+// integrations API under /api. See README → "Integrations".
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spatial-kanban",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // `wrangler deploy` creates this database on the first deploy. To use an
+  // existing one, add its "database_id". Without a database the Worker still
+  // serves the app, just without integrations.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "spatial-kanban",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
+  "observability": { "enabled": true }
+  // Secrets (set with `npx wrangler secret put NAME`, or in .dev.vars locally):
+  //   TOKEN_ENCRYPTION_KEY                      required for any integration
+  //   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET    GitHub Projects
+  //   TRELLO_API_KEY                            Trello
+  //   LINEAR_CLIENT_ID, LINEAR_CLIENT_SECRET    Linear
+  //   JIRA_CLIENT_ID, JIRA_CLIENT_SECRET        Jira Cloud
+}

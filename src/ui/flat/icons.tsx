@@ -32,7 +32,9 @@ export function Logo({ size = 22 }: { size?: number }) {
   )
 }
 
-export function Icon({ name }: { name: 'undo' | 'redo' | 'more' | 'close' | 'plus' | 'cube' | 'board' | 'glasses' | 'phone' | 'archive' | 'trash' | 'help' }) {
+export type IconName = 'undo' | 'redo' | 'more' | 'close' | 'plus' | 'cube' | 'board' | 'glasses' | 'phone' | 'archive' | 'trash' | 'help' | 'sync' | 'external'
+
+export function Icon({ name }: { name: IconName }) {
   const d: Record<typeof name, string> = {
     undo: 'M5.5 3.5L2 7l3.5 3.5M2.5 7h7a4 4 0 0 1 0 8H8',
     redo: 'M10.5 3.5L14 7l-3.5 3.5M13.5 7h-7a4 4 0 0 0 0 8H8',
@@ -46,6 +48,8 @@ export function Icon({ name }: { name: 'undo' | 'redo' | 'more' | 'close' | 'plu
     archive: 'M2 3h12v3H2zM3 6v7.5h10V6M6.5 8.5h3',
     trash: 'M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4',
     help: 'M6 6a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.5v.3M8 12h.01',
+    sync: 'M13.5 8a5.5 5.5 0 0 1-9.9 3.3M2.5 8a5.5 5.5 0 0 1 9.9-3.3M12.5 1.5v3.2H9.3M3.5 14.5v-3.2h3.2',
+    external: 'M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v4h-9v-9h4',
   }
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={name === 'more' ? 2.6 : 1.5} strokeLinecap="round" strokeLinejoin="round">

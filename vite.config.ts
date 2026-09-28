@@ -8,7 +8,11 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 export default defineConfig(({ mode }) => ({
   base: process.env.BASE_PATH ?? '/',
   plugins: [react(), ...(mode === 'https' ? [basicSsl()] : [])],
-  server: { host: true },
+  server: {
+    host: true,
+    // `npm run dev:sync`: forward the integrations API to `npm run worker:dev`.
+    proxy: mode === 'sync' ? { '/api': 'http://localhost:8787' } : undefined,
+  },
   // drei → stats-gl pins an older three; make sure only one copy is ever loaded.
   resolve: { dedupe: ['three'] },
   build: {
@@ -18,6 +22,6 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/worker/**/*.test.ts'],
   },
 }))

@@ -6,3 +6,6 @@ coverage
 test-results
 playwright-report
 .vite
+.dev.vars*
+!.dev.vars.example
+.wrangler

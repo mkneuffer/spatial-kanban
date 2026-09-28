@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Column } from '../../data/model'
 import { useBoardStore } from '../../data/store'
+import { PROVIDER_NAMES } from '../../integrations/protocol'
 import { Icon } from './icons'
 
 const COLORS = ['#8b949e', '#2f81f7', '#d29922', '#a371f7', '#3fb950', '#f85149', '#db61a2', '#39c5cf']
@@ -12,7 +13,10 @@ export function ColumnMenu({ column }: { column: Column }) {
   const ref = useRef<HTMLDivElement>(null)
   const dispatch = useBoardStore((s) => s.dispatch)
   const ids = useBoardStore((s) => s.doc.board.columnIds)
+  const provider = useBoardStore((s) => s.doc.board.integration?.provider)
   const index = ids.indexOf(column.id)
+  // Columns of a synced board belong to the online tool.
+  const synced = !!(provider && column.externalId)
 
   useEffect(() => setName(column.title), [column.title])
   useEffect(() => {
@@ -99,7 +103,8 @@ export function ColumnMenu({ column }: { column: Column }) {
             className="item"
             role="menuitem"
             style={{ color: 'var(--danger)' }}
-            disabled={ids.length <= 1}
+            disabled={ids.length <= 1 || synced}
+            title={synced ? `This column comes from ${PROVIDER_NAMES[provider!]}. Change it there.` : undefined}
             onClick={() => {
               setOpen(false)
               const target = ids[index - 1] ?? ids[index + 1]

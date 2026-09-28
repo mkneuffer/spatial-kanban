@@ -21,7 +21,8 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 - **Readable.** Text colors from column and label colors are checked against their background (WCAG contrast), so the whiteboard never gets pale or white ink.
 - **Editable board.** Rename the board and give it a description, and add, rename, recolor, reorder or delete columns and labels (each label gets a color and an icon) from **⋯ → Edit board, columns & labels**. Every edit can be undone.
 - **Due dates and deadlines.** A card can have a planned due date, a hard deadline, or both. They show on the card and turn red once they've passed, and the drawer warns you when the due date falls after the deadline.
-- **Local-first.** Everything is saved to IndexedDB on this device, with undo/redo and JSON import/export.
+- **Local-first.** Everything is saved to IndexedDB on this device, with undo/redo, JSON import/export and several boards side by side.
+- **Optional two-way sync** with **GitHub Projects, Trello, Linear and Jira**, through a small Cloudflare Worker. Move a card on your wall and it moves in the tool, and changes made there show up on the board. Without the Worker the app is exactly as local-only as before.
 - **Accessible.** The 2D board is fully keyboard- and screen-reader-operable. Labels always pair color with an icon, and there are high-contrast, reduced-motion and left-hand modes.
 - **Fast.** Instanced card bodies, pills and shadows, and batched SDF text. A 16-card board draws in **about 50 draw calls and 25k triangles** in XR, including controller models (the budget is under 150 calls).
 
@@ -93,10 +94,61 @@ Run **Space Setup** on the Quest first so walls and tables have semantic labels.
 | Script | What it does |
 |---|---|
 | `npm run dev` / `dev:https` | Vite dev server (plain HTTP or self-signed HTTPS) |
+| `npm run dev:sync` | Vite dev server that forwards `/api` to `npm run worker:dev` |
+| `npm run worker:dev` | Build, then run the Worker locally (app + integrations API + local D1) on :8787 |
+| `npm run deploy` | Build and deploy the Worker to Cloudflare, then apply D1 migrations |
 | `npm run build` | Type-check and produce a production build in `dist/` |
 | `npm run preview` | Serve the production build |
 | `npm test` | Unit tests (Vitest) |
 | `npm run typecheck` | TypeScript project build, no emit |
+
+## Integrations (optional)
+
+A board can mirror a board in an online tool and stay in sync both ways:
+
+| Tool | A board is… | Columns | Cards | Pushed from here |
+|---|---|---|---|---|
+| GitHub Projects | a project (v2) | Status field options, plus "No Status" | issues, pull requests, draft issues | move, reorder, title and body, archive, new cards (as draft issues) |
+| Trello | a board | open lists | open cards | move, reorder, name and description, archive, new cards |
+| Linear | a team | workflow states | issues (done or canceled ones from the last 30 days) | state, order, title and description, archive, new issues |
+| Jira Cloud | a project | statuses, To Do → In progress → Done | issues (done ones updated in the last 30 days) | status (through the workflow's transitions), summary and description, new issues |
+
+Labels, assignees and due dates come from the tool and are read-only on a synced card. Jira keeps its own rank, and archiving a Jira card only hides it here.
+
+**Using it.** In **⋯ → Boards & integrations…**, connect a tool, then open one of its boards. It opens as a new board on this device, and your other boards stay as they were. A pill next to the board title shows the sync state. The app pulls every 30 seconds and whenever you come back to the tab, and pushes your changes about half a second after you make them. Creating a card in XR or the 2D board creates it in the tool once you've given it a title. When the tool refuses a change (for example a Jira workflow rule), you get a message and the card goes back to where the tool has it. "Stop syncing" keeps the cards as a local board.
+
+**How it syncs.** Each device keeps a *shadow*: the remote board as of the last sync. For every field, if the remote differs from the shadow the remote changed, so it wins; otherwise, if the board differs from the shadow, that's a local change and it's pushed. Moves are pushed as the smallest set of cards that changed order. The shadow is saved in the same IndexedDB transaction as the board. Creates are idempotent on the server, so a retried create never makes a duplicate. Deleting a synced card archives it in the tool (nothing is ever deleted there). If most of a board goes missing at once, nothing is archived and you get a warning instead. Importing a JSON export of a synced board gives you a local copy. For a few seconds after a push, pulls don't override the card, because some APIs (Jira's search) lag behind their own writes. The pure logic is in `src/integrations/sync.ts` and the loop in `engine.ts`.
+
+**What's on the server.** A Cloudflare Worker (`worker/`) serves the app and a small `/api`. Board data stays in each browser. D1 stores only anonymous users, sessions (the cookie holds a random token; the database stores its SHA-256), which accounts are connected, and provider tokens encrypted with AES-GCM. OAuth runs server-side, so client secrets and tokens never reach the browser. Connecting the same tool account on a second device signs that device in as the same user, so your other connections come along. Writes must be same-origin JSON requests.
+
+### Setting it up
+
+The backend runs either on your **Cloudflare Pages** project (the `functions/` folder hands `/api/*` to the Worker code) or as a standalone **Worker** (`wrangler.jsonc`). Pick one.
+
+**On Cloudflare Pages (Git-connected, builds on every push):**
+
+1. In the Cloudflare dashboard, create a D1 database named `spatial-kanban`. In its **Console**, run the SQL in `worker/migrations/0001_init.sql`.
+2. In the Pages project, go to **Settings → Bindings** and add a *D1 database* binding named `DB` pointing to that database.
+3. In **Settings → Variables and Secrets** (Production), add `TOKEN_ENCRYPTION_KEY` (any long random string, e.g. from `openssl rand -base64 32`) and the secrets for the tools you want (below).
+4. Redeploy, since bindings apply to new deployments. Callback URLs use your Pages domain, e.g. `https://spatial-kanban.pages.dev/api/auth/github/callback`.
+
+**As a standalone Worker:**
+
+1. `npx wrangler login`, then `npm run deploy`. The first deploy creates the D1 database. If `wrangler d1 migrations apply` can't find it, run `npx wrangler d1 create spatial-kanban` and add the printed `database_id` to `wrangler.jsonc`.
+2. Set the encryption key: `openssl rand -base64 32 | npx wrangler secret put TOKEN_ENCRYPTION_KEY`, and set each tool's secrets with `npx wrangler secret put NAME`.
+
+**Then, either way, register an app with each tool you want.** Skip any you don't use; tools without credentials aren't offered. The callback URL is `https://<your-site>/api/auth/<tool>/callback`.
+
+| Tool | Where | Callback / settings | Secrets |
+|---|---|---|---|
+| GitHub | [Developer settings → OAuth Apps](https://github.com/settings/developers) | Authorization callback URL: `…/api/auth/github/callback` | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (optional `GITHUB_SCOPES`, default `read:user read:org project repo`) |
+| Trello | [Power-Up admin](https://trello.com/power-ups/admin) → API key | Add your site's origin to the key's allowed origins | `TRELLO_API_KEY` |
+| Linear | Linear → Settings → API → OAuth applications | Callback URL: `…/api/auth/linear/callback` | `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET` |
+| Jira | [Atlassian developer console](https://developer.atlassian.com/console/myapps/) → OAuth 2.0 integration | Callback URL: `…/api/auth/jira/callback`. Permissions: Jira API (`read:jira-work`, `write:jira-work`, `read:jira-user`) and User identity API (`read:me`) | `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET` |
+
+Organizations that restrict OAuth apps on GitHub must approve the app before their projects appear.
+
+**Locally:** copy `.dev.vars.example` to `.dev.vars` and fill in what you need. Then either run `npm run worker:dev` and open http://localhost:8787, or keep Vite's hot reload with `npm run worker:dev` in one terminal and `npm run dev:sync` in another (set `PUBLIC_URL=http://localhost:5173` so OAuth comes back to Vite). Register a separate OAuth app per tool for local development, with `http://localhost:…` callback URLs.
 
 ## Architecture
 
@@ -107,6 +159,7 @@ Spatial   ─ placement & snapping · anchor manager · surface registry
 Board     ─ layout engine (pure, meters) · drag state machine (pure) · springs
 Present   ─ active skin (surface, cards, motion, sound) · 3D menus & panels · 2D UI
 Data      ─ Zustand store (serializable actions, Immer patches, undo) · IndexedDB (Dexie)
+Sync      ─ optional: three-way sync engine ⇄ Cloudflare Worker (/api, D1) ⇄ GitHub · Trello · Linear · Jira
 ```
 
 The key decisions follow [PLAN §8](PLAN.md#8-architecture):
@@ -152,7 +205,11 @@ src/
   xr/           session store, capabilities, anchors, surfaces, placement/, hands/, handles, phone HUD, emulator
   ui/           flat/ (2D board, drawer, dialogs), xr/ (3D panels, keyboard), toasts
   fx/           procedural WebAudio sounds, haptics
-tests/unit/     ordering, store, layout (both skins), drag, snapping, persistence
+  integrations/ wire protocol, three-way sync planner, sync engine, API client
+worker/         Cloudflare Worker: static assets + /api (OAuth, sessions, provider adapters), D1 migrations
+functions/      Cloudflare Pages Functions entry: hands /api/* to the Worker handler
+tests/unit/     ordering, store, layout (both skins), drag, snapping, persistence, sync planner, sync engine
+tests/worker/   Worker API end to end (D1 on node:sqlite, mocked providers), provider mappings
 ```
 
 ## Plan coverage
@@ -175,7 +232,12 @@ tests/unit/     ordering, store, layout (both skins), drag, snapping, persistenc
 - Haptics, audio and reduced-motion mode
 - Phone AR DOM-overlay HUD
 
-**Phase 3 (Yjs sync, accounts, GitHub Projects sync) and Phase 4: not started.** The action log and patch stream are the intended seams for these.
+**Phase 3 (sync and integrations): integrations done.**
+- Two-way sync with GitHub Projects, Trello, Linear and Jira through an optional Cloudflare Worker with D1 (see [Integrations](#integrations-optional))
+- Several boards per device, with a board switcher
+- Sign-in via the connected tools (OAuth); a second device picks up the same connections
+
+Not started: live multi-user Yjs sync with presence, share links, and Phase 4.
 
 ### Deliberate deviations from the plan
 
@@ -192,7 +254,11 @@ tests/unit/     ordering, store, layout (both skins), drag, snapping, persistenc
 
 ## Testing
 
-- `npm test` runs 82 unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, distance-scaled tap slop, drag, tear-off hysteresis, parked cards, throw to archive, pad, bin), pointer projection (ray/plane, grazing rays, grab positions), selection, snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
+- `npm test` runs 161 tests:
+  - Unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, distance-scaled tap slop, poke taps, drag, tear-off hysteresis, parked cards, throw to archive, pad, bin), pointer projection (ray/plane, grazing rays, grab positions), selection, snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
+  - The sync planner: pulls, pushes, conflicts, minimal reorders, refusals, deleted cards.
+  - The sync engine: debouncing, in-flight creates, refusals, stale reads.
+  - The Worker, called through its `fetch` handler with D1 backed by `node:sqlite` and provider APIs mocked: OAuth round trips (state checks, Trello's fragment flow, second device), encrypted token storage, token refresh with rotation, project listing and mapping, op application, idempotent creates, validation, cross-origin refusal. Plus each provider's mapping (Jira ADF ↔ text, Linear state order, Trello positions).
 - **XR in the browser:** `npm run dev`, then use the IWER emulator. With `?devui=0`, a script can drive `xrStore.getState().emulator.controllers.right`.
 - **On device:** Quest 3 over `adb reverse`, with remote debugging at `chrome://inspect`.
 
@@ -200,4 +266,6 @@ tests/unit/     ordering, store, layout (both skins), drag, snapping, persistenc
 
 ## Deployment
 
-GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) type-checks, tests and builds every push and pull request. Pushes to `main` deploy to GitHub Pages; the base path comes from the repository name.
+GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) type-checks, tests and builds every push and pull request. Pushes to `main` deploy to GitHub Pages (local-only, no integrations); the base path comes from the repository name.
+
+To also deploy the Worker from CI, set the repository variable `DEPLOY_CLOUDFLARE` to `true` and add the secrets `CLOUDFLARE_API_TOKEN` (with Workers and D1 edit permissions) and `CLOUDFLARE_ACCOUNT_ID`. Each push to `main` then runs `wrangler deploy` and applies D1 migrations. Provider secrets stay in Cloudflare (`wrangler secret put`). Once the Worker is your main URL you can drop the Pages job.
