@@ -19,7 +19,8 @@ export function archiveWithAnimation(cardId: string, runtime?: BoardRuntime) {
   usePlacements.getState().unparkCard(cardId)
   store.archiveCard(cardId, true)
   const view = useView.getState()
-  view.set({ leaving: { ...view.leaving, [cardId]: performance.now() }, detailCardId: view.detailCardId === cardId ? null : view.detailCardId })
+  view.set({ leaving: { ...view.leaving, [cardId]: performance.now() } })
+  if (view.detailCardId === cardId) view.select(null)
   setTimeout(() => {
     const v = useView.getState()
     const next = { ...v.leaving }
@@ -77,10 +78,13 @@ export function runDragEffects(effects: DragEffect[], runtime: BoardRuntime, gam
         playSound(skin.sounds.drop)
         break
       }
-      case 'detail':
-        useView.getState().set({ detailCardId: fx.cardId })
+      case 'detail': {
+        // Tapping the selected card again closes its details.
+        const view = useView.getState()
+        view.select(view.detailCardId === fx.cardId ? null : fx.cardId)
         playSound('clickSoft')
         break
+      }
       case 'archive':
         archiveWithAnimation(fx.cardId, runtime)
         break

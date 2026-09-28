@@ -5,7 +5,7 @@ import { Shape, ShapeGeometry, type Group, type Mesh } from 'three'
 import { FONTS } from '../../render/fonts'
 import { playSound } from '../../fx/audio'
 import { pulse } from '../../fx/haptics'
-import { gamepadOf, type XPointerEvent } from '../../board/BoardInteraction'
+import { gamepadOf, isPrimaryButton, type XPointerEvent } from '../../board/BoardInteraction'
 
 /** Colors for in-XR UI panels (dark glass over passthrough). */
 export const UI = {
@@ -129,6 +129,57 @@ export function Label({
   )
 }
 
+/**
+ * Press behaviour for 3D controls. Activates on release over the control by the
+ * pointer that pressed it, however long the press took — pmndrs' `click` gives
+ * up after 300 ms, which drops many Quest pinches. Hover is tracked per pointer
+ * so a second hand or the controller's grab sphere leaving doesn't clear it.
+ */
+function usePress(onActivate: (e: XPointerEvent) => void, disabled = false) {
+  const [hover, setHover] = useState(false)
+  const [pressed, setPressed] = useState(false)
+  const hovering = useRef(new Set<number>())
+  const pressedBy = useRef<number | null>(null)
+  const release = () => {
+    pressedBy.current = null
+    setPressed(false)
+  }
+  const handlers = {
+    onPointerEnter: (raw: unknown) => {
+      const e = raw as XPointerEvent
+      e.stopPropagation()
+      if (disabled) return
+      if (hovering.current.size === 0) pulse(gamepadOf(e), 'tick')
+      hovering.current.add(e.pointerId)
+      setHover(true)
+    },
+    onPointerLeave: (raw: unknown) => {
+      const e = raw as XPointerEvent
+      hovering.current.delete(e.pointerId)
+      if (hovering.current.size === 0) setHover(false)
+      if (pressedBy.current === e.pointerId) release()
+    },
+    onPointerDown: (raw: unknown) => {
+      const e = raw as XPointerEvent
+      e.stopPropagation()
+      if (disabled || !isPrimaryButton(e) || pressedBy.current !== null) return
+      pressedBy.current = e.pointerId
+      setPressed(true)
+    },
+    onPointerUp: (raw: unknown) => {
+      const e = raw as XPointerEvent
+      e.stopPropagation()
+      if (pressedBy.current !== e.pointerId) return
+      release()
+      if (!disabled) onActivate(e)
+    },
+    onPointerCancel: (raw: unknown) => {
+      if (pressedBy.current === (raw as XPointerEvent).pointerId) release()
+    },
+  }
+  return { hover: hover && !disabled, pressed, handlers }
+}
+
 export interface ButtonProps {
   label: string
   sublabel?: string
@@ -158,8 +209,11 @@ export function Button3D({
   position,
   icon,
 }: ButtonProps) {
-  const [hover, setHover] = useState(false)
-  const [pressed, setPressed] = useState(false)
+  const { hover, pressed, handlers } = usePress((e) => {
+    playSound('click')
+    pulse(gamepadOf(e), 'firm')
+    onClick()
+  }, disabled)
   const group = useRef<Group>(null)
   const face = useRef<Mesh>(null)
   const fs = fontSize ?? Math.min(0.02, height * 0.36)
@@ -179,35 +233,7 @@ export function Button3D({
   return (
     <group position={position}>
       <group ref={group}>
-        <mesh
-          ref={face}
-          geometry={geometry}
-          onPointerEnter={(e) => {
-            if (disabled) return
-            e.stopPropagation()
-            setHover(true)
-            pulse(gamepadOf(e as unknown as XPointerEvent), 'tick')
-          }}
-          onPointerLeave={() => {
-            setHover(false)
-            setPressed(false)
-          }}
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            if (!disabled) setPressed(true)
-          }}
-          onPointerUp={(e) => {
-            e.stopPropagation()
-            setPressed(false)
-          }}
-          onClick={(e) => {
-            e.stopPropagation()
-            if (disabled) return
-            playSound('click')
-            pulse(gamepadOf(e as unknown as XPointerEvent), 'firm')
-            onClick()
-          }}
-        >
+        <mesh ref={face} geometry={geometry} {...handlers}>
           <meshBasicMaterial color={color} />
         </mesh>
         {icon ? (
@@ -235,7 +261,11 @@ export function Button3D({
 /** A two-state toggle row: label on the left, pill switch on the right. */
 export function Toggle3D({ label, value, onChange, width = 0.3, position }: { label: string; value: boolean; onChange: (v: boolean) => void; width?: number; position?: [number, number, number] }) {
   const knob = useRef<Mesh>(null)
-  const [hover, setHover] = useState(false)
+  const { hover, handlers } = usePress((e) => {
+    playSound('click')
+    pulse(gamepadOf(e), 'tick')
+    onChange(!value)
+  })
   useFrame((_, dt) => {
     if (!knob.current) return
     const tx = value ? 0.012 : -0.012
@@ -243,20 +273,7 @@ export function Toggle3D({ label, value, onChange, width = 0.3, position }: { la
   })
   return (
     <group position={position}>
-      <mesh
-        geometry={roundedRectGeometry(width, 0.042, 0.012)}
-        onPointerEnter={(e) => {
-          e.stopPropagation()
-          setHover(true)
-        }}
-        onPointerLeave={() => setHover(false)}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          playSound('click')
-          onChange(!value)
-        }}
-      >
+      <mesh geometry={roundedRectGeometry(width, 0.042, 0.012)} {...handlers}>
         <meshBasicMaterial color={hover ? UI.buttonHover : UI.button} />
       </mesh>
       <Label size={0.016} anchorX="left" position={[-width / 2 + 0.014, 0, 0.002]}>

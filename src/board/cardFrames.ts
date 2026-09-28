@@ -6,7 +6,7 @@ import { usePlacements } from '../data/placements'
 import { useSettings } from '../data/settings'
 import type { SkinMotion } from '../skins/types'
 import type { CardAnim, AnimTarget } from './animator'
-import { NEW_CARD_ID, onBoardDragZ, trailVelocity } from './drag'
+import { NEW_CARD_ID, onBoardDragZ, tearOffHeight, trailVelocity } from './drag'
 import type { BoardLayout, CardSlot } from './layout'
 import { useBoardRuntime } from './runtime'
 import { hash01, toLocal } from './space'
@@ -66,7 +66,8 @@ export function useCardFrames<C>(
   useFrame((_, dt) => {
     const now = performance.now()
     const view = useView.getState()
-    const { drag, skinSwitch, hoverCardId, detailCardId, leaving } = view
+    const { drag, skinSwitch, detailCardId, leaving } = view
+    const hoverCards = runtime.hoverCards
     const free = usePlacements.getState().freeCards
     const { cards, board } = useBoardStore.getState().doc
     const doneColumnId = board.columnIds[board.columnIds.length - 1]
@@ -119,7 +120,7 @@ export function useCardFrames<C>(
       let lift = 0
       let clipMin = -Infinity
       let clipMax = Infinity
-      const hovered = hoverCardId === id && drag.phase === 'idle'
+      const hovered = drag.phase === 'idle' && isHovered(hoverCards, id)
 
       if (kind === 'slot') {
         const [cx, cy] = toLocal(r.x + r.w / 2, r.y + r.h / 2, [W, H])
@@ -151,7 +152,7 @@ export function useCardFrames<C>(
         const free3d = drag.phase === 'dragFree'
         target.x = cx
         target.y = cy
-        target.z = free3d ? p.z : onBoardDragZ(drag.pointerKind, p.z, motion.liftHeight * liftScale)
+        target.z = free3d ? p.z : onBoardDragZ(drag.pointerKind, p.z, motion.liftHeight * liftScale, tearOffHeight(drag))
         target.w = size[0]
         target.h = size[1]
         const tilt = Math.max(-0.3, Math.min(0.3, -velocity[0] * motion.dragTilt))
@@ -221,6 +222,11 @@ export function useCardFrames<C>(
     }
     drawer.end()
   })
+}
+
+function isHovered(hover: ReadonlyMap<number, ID>, id: ID): boolean {
+  for (const v of hover.values()) if (v === id) return true
+  return false
 }
 
 /** Transform a card-local point (from the card's top-left, y down) to board-local 3D. */

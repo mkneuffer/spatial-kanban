@@ -43,9 +43,9 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Action | Hands / controllers | Phone AR | Desktop 3D | 2D board |
 |---|---|---|---|---|
 | Pick up / move | Near: pinch the card, or poke and slide it with a fingertip. Far: pinch or trigger along the ray. Controllers: squeeze near a card | Touch drag | Mouse drag | Drag, or Space then arrow keys |
-| Card details | Quick tap (< 300 ms, < 1 cm) | Tap | Click | Click / Enter |
-| Tear off, park in the room | Grab and pull > 12 cm off the board | – | – | – |
-| Return a parked card | Drag it back onto the board | – | Details → Return to board | Details → Return to board |
+| Card details | Quick tap (< 300 ms, < 1 cm up close; far rays allow a little more). Tap it again, or tap empty board, to close | Tap | Click | Click / Enter |
+| Tear off, park in the room | Grab and pull > 12 cm further from the board than where you grabbed it | – | – | – |
+| Return a parked card | Drag it back onto the board (a ray moves it at its own depth until it's over the board) | – | Details → Return to board | Details → Return to board |
 | Archive | Drop on the bin, or throw a torn-off card downward | Drop on the bin | Drop on the bin | Details → Archive |
 | New card | Pull from the pad, or tap it | Tap the pad | Drag or click the pad | "Add card" |
 | Scroll a long column (Projects) | Thumbstick while hovering | Swipe | Wheel | Scroll |
@@ -179,7 +179,7 @@ A skin never creates one mesh per card. Per frame, a shared driver (`board/cardF
 - `ShadowBatch`: instanced soft contact-shadow blobs that grow with lift. There are no shadow maps.
 - `TextBatch`: troika `BatchedText`, so all SDF text in a layer takes one draw call.
 
-Invisible per-card hit proxies take pointer events, so hands (sphere intersection), pokes and rays all work the same way.
+Invisible per-card hit proxies take pointer events, so hands (sphere intersection), pokes and rays all work the same way. Proxies are clipped to their column's scroll viewport and switched off through pointer-events (three's `visible` does not stop raycasts). The board surface sits below everything else in pointer-events order, so a grab sphere that reaches both a card and the board picks the card. Hover is tracked per pointer, and each controller's thumbstick scrolls the column its own ray is over.
 
 ### Hands
 
@@ -244,6 +244,7 @@ Not started: live multi-user Yjs sync with presence, share links, and Phase 4.
 | Plan | Built | Why |
 |---|---|---|
 | Tap threshold 150 ms | 300 ms | Pinches on Quest routinely take longer than 150 ms, which made opening details unreliable |
+| Tap threshold 1 cm | 1 cm for hands, grabs and pokes; about 1.1° of ray angle (1–6 cm) for far rays, a smaller angle for the mouse | Hand tremor and the pinch itself sweep a far ray several centimetres across the board |
 | `@react-three/uikit`, `@react-three/handle` | Small custom 3D UI kit and handle logic | Fewer moving parts and full control over the look and hit areas |
 | Skin `Card` component per card | Skin `Cards` layer that renders all cards | Required by the instancing and batching budget (PLAN §12) |
 | Free cards get their own anchors | Parked cards are stored relative to the board | They persist and restore together with the board anchor, which is simpler and more robust |
@@ -253,8 +254,8 @@ Not started: live multi-user Yjs sync with presence, share links, and Phase 4.
 
 ## Testing
 
-- `npm test` runs 141 tests:
-  - Unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, drag, tear-off hysteresis, throw to archive, pad, bin), snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
+- `npm test` runs 161 tests:
+  - Unit tests: fractional ordering, store actions and undo/redo (including board, label and deadline edits), due date and deadline formatting, both skin layouts (gaps, WIP counts, scroll, stacking, jitter), the drag state machine (tap, distance-scaled tap slop, poke taps, drag, tear-off hysteresis, parked cards, throw to archive, pad, bin), pointer projection (ray/plane, grazing rays, grab positions), selection, snapping math (normal classification, wall/desk/float poses, edge snapping, smoothing), and persistence round-trips on fake IndexedDB.
   - The sync planner: pulls, pushes, conflicts, minimal reorders, refusals, deleted cards.
   - The sync engine: debouncing, in-flight creates, refusals, stale reads.
   - The Worker, called through its `fetch` handler with D1 backed by `node:sqlite` and provider APIs mocked: OAuth round trips (state checks, Trello's fragment flow, second device), encrypted token storage, token refresh with rotation, project listing and mapping, op application, idempotent creates, validation, cross-origin refusal. Plus each provider's mapping (Jira ADF ↔ text, Linear state order, Trello positions).
