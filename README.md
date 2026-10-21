@@ -91,6 +91,10 @@ npm run dev:https               # https://<your-ip>:5173
 
 Run **Space Setup** on the Quest first so walls and tables have semantic labels. Without it, snapping falls back to hit-test normals.
 
+### Trailer terminal
+
+`/trailer.html` is a separate page for recording the trailer: a green-on-black "hacker" terminal. Mash any keys and it types out XR code; press **Enter** and big **Commit → Push → PR** buttons appear. Click them in order (or keep pressing Enter) to print git output, ending with a "SHIPPED" screen. **Esc** resets.
+
 ### Scripts
 
 | Script | What it does |

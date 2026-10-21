@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>Spatial Kanban — Terminal</title>
+  </head>
+  <body>
+    <div id="terminal" class="terminal">
+      <div class="titlebar">
+        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+        <span class="title">dev@spatial-kanban: ~/spatial-kanban — zsh</span>
+      </div>
+      <pre id="screen" class="screen"></pre>
+      <div id="hint" class="hint">type anything · Enter to ship · Esc to reset</div>
+    </div>
+    <div id="pipeline" class="pipeline" hidden>
+      <button class="step" data-step="commit"><span class="icon">◆</span><span class="label">Commit</span></button>
+      <span class="arrow">›</span>
+      <button class="step" data-step="push"><span class="icon">▲</span><span class="label">Push</span></button>
+      <span class="arrow">›</span>
+      <button class="step" data-step="pr"><span class="icon">⇄</span><span class="label">PR</span></button>
+    </div>
+    <div id="shipped" class="shipped" hidden>SHIPPED ✓</div>
+    <script type="module" src="/src/trailer/main.ts"></script>
+  </body>
+</html>
