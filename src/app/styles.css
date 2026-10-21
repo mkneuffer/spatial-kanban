@@ -1031,6 +1031,18 @@ a.btn {
   text-decoration: none;
   color: inherit;
 }
+/* Corner link to the trailer recording page (trailer.html). */
+.trailer-link {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 40;
+  opacity: 0.8;
+  background: var(--bg-elev);
+}
+.trailer-link:hover {
+  opacity: 1;
+}
 a.btn.primary {
   color: var(--accent-fg);
 }
