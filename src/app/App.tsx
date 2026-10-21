@@ -108,6 +108,11 @@ export function App() {
       {boardsOpen && <BoardsDialog onClose={() => useIntegrations.getState().closePanel()} />}
       <VoiceCaption />
       <Toasts />
+      {mode !== 'xr' && (
+        <a className="btn ghost trailer-link" href={`${import.meta.env.BASE_URL}trailer.html`} title="Open the trailer terminal">
+          ▶ Trailer
+        </a>
+      )}
     </div>
   )
 }
