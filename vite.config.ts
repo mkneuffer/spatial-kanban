@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => ({
     target: 'es2022',
     // IWER's synthetic rooms are large lazy chunks that only the dev emulator ever loads.
     chunkSizeWarningLimit: 2500,
+    // trailer.html: a standalone fake terminal used for recording the trailer.
+    rollupOptions: { input: { main: 'index.html', trailer: 'trailer.html' } },
   },
   test: {
     environment: 'node',
