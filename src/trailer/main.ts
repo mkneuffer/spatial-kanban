@@ -4,10 +4,10 @@ import { SNIPPET } from './snippet'
 // Trailer page: a fake terminal for screen recording. Any key "types" the snippet,
 // Enter brings up Commit → Push → PR, and each click prints believable git output.
 
-const BRANCH = 'feat/wall-anchors'
-const COMMIT_MSG = 'feat(xr): pin the board to your wall with persistent anchors'
-const REPO = 'github.com/mkneuffer/spatial-kanban'
-const PR_NUMBER = 42
+const BRANCH = 'feat/signal-beacon'
+const COMMIT_MSG = 'feat: add glowing signal beacon'
+const REPO = 'github.com/example/workspace'
+const PR_NUMBER = 18
 
 const screen = document.getElementById('screen')!
 const hint = document.getElementById('hint')!
@@ -15,7 +15,7 @@ const pipeline = document.getElementById('pipeline')!
 const shipped = document.getElementById('shipped')!
 const steps = [...pipeline.querySelectorAll<HTMLButtonElement>('.step')]
 
-const prompt = () => `<span class="prompt">dev@spatial-kanban</span>:<span class="path">~/spatial-kanban</span> <span class="branch">(${BRANCH})</span> $ `
+const prompt = () => `<span class="prompt">dev@workstation</span>:<span class="path">~/workspace</span> <span class="branch">(${BRANCH})</span> $ `
 
 let typed: Text
 let cursor: HTMLSpanElement
@@ -25,7 +25,7 @@ let nextStep = 0
 
 function reset() {
   screen.innerHTML = ''
-  appendHtml(`${prompt()}nvim src/xr/wallAnchor.ts\n\n`)
+  appendHtml(`${prompt()}nvim src/scene/beacon.ts\n\n`)
   typed = document.createTextNode('')
   cursor = document.createElement('span')
   cursor.className = 'cursor'
@@ -78,7 +78,7 @@ function openPipeline() {
   phase = 'pipeline'
   // Close the "file": print :wq and drop back to a prompt.
   typed.appendData('\n')
-  appendHtml(`<span class="dim">:wq</span>\n<span class="dim">"src/xr/wallAnchor.ts" written</span>\n\n`)
+  appendHtml(`<span class="dim">:wq</span>\n<span class="dim">"src/scene/beacon.ts" written</span>\n\n`)
   cursor.remove()
   document.body.classList.add('with-pipeline')
   pipeline.hidden = false
@@ -135,20 +135,16 @@ const runners: Record<string, () => Promise<void>> = {
     await command(`git commit -m "${COMMIT_MSG}"`)
     await lines([
       `[${BRANCH} ${hex(7)}] ${COMMIT_MSG}`,
-      ` 4 files changed, 212 insertions(+), 18 deletions(-)`,
-      ` create mode 100644 src/xr/wallAnchor.ts`,
+      ` 1 file changed, 18 insertions(+), 2 deletions(-)`,
+      ` create mode 100644 src/scene/beacon.ts`,
     ])
   },
   async push() {
     await command(`git push -u origin ${BRANCH}`)
-    await lines(['Enumerating objects: 23, done.'], 60)
-    await progress('Counting objects', 23)
-    await lines(['Delta compression using up to 12 threads'], 60)
-    await progress('Compressing objects', 14)
-    await progress('Writing objects', 16, ' | 6.81 KiB | 6.81 MiB/s')
+    await lines(['Enumerating objects: 8, done.'], 25)
+    await progress('Writing objects', 5, ' | 1.2 KiB')
     await lines([
-      `Total 16 (delta 9), reused 0 (delta 0), pack-reused 0`,
-      `remote: Resolving deltas: 100% (9/9), completed with 6 local objects.`,
+      `Total 5 (delta 2), reused 0 (delta 0), pack-reused 0`,
       `To ${REPO}.git`,
       ` * [new branch]      ${BRANCH} -> ${BRANCH}`,
       `branch '${BRANCH}' set up to track 'origin/${BRANCH}'.`,
@@ -156,12 +152,11 @@ const runners: Record<string, () => Promise<void>> = {
   },
   async pr() {
     await command('gh pr create --fill --base main')
-    await lines([`Creating pull request for <span class="branch">${BRANCH}</span> into <span class="branch">main</span> in mkneuffer/spatial-kanban`, ''], 200)
+    await lines([`Creating pull request for <span class="branch">${BRANCH}</span> into <span class="branch">main</span> in example/workspace`, ''], 50)
     await lines([ok(`https://${REPO}/pull/${PR_NUMBER}`), ''], 150)
-    await command(`gh pr checks ${PR_NUMBER} --watch`)
-    for (const check of ['typecheck', 'lint', 'unit tests', 'build', 'deploy preview']) {
+    for (const check of ['checks queued', 'preview ready']) {
       appendHtml(`<span class="dim">*  ${check}</span>`)
-      await sleep(350 + Math.random() * 400)
+      await sleep(80 + Math.random() * 100)
       screen.lastElementChild!.innerHTML = `${ok('✓')}  ${check}`
       appendHtml('\n')
     }
