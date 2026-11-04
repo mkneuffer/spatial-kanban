@@ -27,6 +27,16 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 - **Accessible.** The 2D board is fully keyboard- and screen-reader-operable. Labels always pair color with an icon, and there are high-contrast, reduced-motion and left-hand modes.
 - **Fast.** Instanced card bodies, pills and shadows, and batched SDF text. A 16-card board draws in **about 50 draw calls and 25k triangles** in XR, including controller models (the budget is under 150 calls).
 
+## Screenshots
+
+Captured in mixed reality with the dev build's IWER Quest 3 emulator in the synthetic `office_small` room (the grey room is the emulator's stand-in for passthrough).
+
+| Placing on a wall | Pinned to the wall (Whiteboard skin) |
+|---|---|
+| ![Ghost board snapping to a detected wall](docs/screenshots/mr-01-placing-wall.png) | ![Whiteboard board on the wall](docs/screenshots/mr-02-wall-whiteboard.png) |
+| **Close-up** | **Projects skin** |
+| ![Close-up of sticky notes on the whiteboard](docs/screenshots/mr-03-wall-whiteboard-closeup.png) | ![Projects skin on the wall](docs/screenshots/mr-04-wall-projects.png) |
+
 ## Platform support
 
 Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures`). The app never sniffs user agents.
