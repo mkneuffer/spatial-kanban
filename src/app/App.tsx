@@ -109,8 +109,8 @@ export function App() {
       <VoiceCaption />
       <Toasts />
       {mode !== 'xr' && (
-        <a className="btn ghost trailer-link" href={`${import.meta.env.BASE_URL}trailer.html`} title="Open the trailer terminal">
-          ▶ Trailer
+        <a className="btn ghost trailer-link" href={`${import.meta.env.BASE_URL}trailer.html`} title="Open the multi-monitor coding workstation">
+          ▶ Workstation
         </a>
       )}
     </div>
