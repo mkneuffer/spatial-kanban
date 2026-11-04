@@ -105,9 +105,21 @@ npm run dev:https               # https://<your-ip>:5173
 
 Run **Space Setup** on the Quest first so walls and tables have semantic labels. Without it, snapping falls back to hit-test normals.
 
-### Trailer terminal
+### Multi-monitor workstation
 
-`/trailer.html` is a separate page for recording the trailer: a green-on-black "hacker" terminal. Mash any keys and it types out XR code; press **Enter** and big **Commit → Push → PR** buttons appear. Click them in order (or keep pressing Enter) to print git output, ending with a "SHIPPED" screen. **Esc** resets.
+`/trailer.html` (the **▶ Workstation** link in the corner of the board) is a fake coding session spread over several browser windows, one per monitor, for recording the trailer. Open the launcher and either open each window yourself or press **Spread across my screens**: in Chrome and Edge that uses the Window Management API to put one window on each display (the browser asks first). Elsewhere the windows open separately and you drag each to a monitor.
+
+| Window (`?role=`) | What it shows |
+|---|---|
+| `editor` | nvim with a file tree; any key types the code |
+| `terminal` | the dev server and test watcher reacting to each save, then **Commit → Push → PR → Merge** |
+| `preview` | `localhost:5173`: the beacon scene builds itself as the code is typed, and gets "deployed" after the merge |
+| `pr` | the pull request: the saved diff, CI checks running live, the review, and the merge button |
+| `board` | the ticket moving Backlog → In progress → In review → Done, with an activity feed |
+
+![Editor, terminal, preview and pull request windows of the workstation](docs/screenshots/workstation.png)
+
+The windows stay in sync over a `BroadcastChannel` (same browser, same machine). In any window, any key types, **Enter** moves the session on (save → commit → push → PR → merge once approved) and **Esc** resets every window. Step timing comes from shared timestamps, so closing a window never stalls the others, and a window opened mid-session catches up.
 
 ### Scripts
 
