@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { DoubleSide, MeshBasicMaterial, Mesh, BufferGeometry } from 'three'
+import { DoubleSide, MeshBasicMaterial, Mesh, BufferGeometry, PlaneGeometry } from 'three'
 import type { SurfaceProps } from '../types'
 import { ChipBatch, createChipMaterial } from '../../render/chips'
 import { PaperBatch, createPaperMaterial } from '../../render/paper'
@@ -12,6 +12,21 @@ import { useBoardStore } from '../../data/store'
 import { usePlacements } from '../../data/placements'
 import { markerInk, STICKY_COLORS, whiteboardPalette } from './palette'
 import { whiteboardMetrics, type WhiteboardContent } from './layout'
+import { WhiteboardTools, type TrayGeometry } from './Tools'
+import { boardSheenTexture, boardShadowTexture } from './textures'
+
+/** Frame, tray and depth dimensions shared by the surface and the tools. */
+export function whiteboardFrame(W: number, H: number, k: number) {
+  const d = 0.016 * k
+  const fw = 0.022 * k // frame width
+  const fd = 0.032 * k
+  const trayW = Math.min(W * 0.62, 0.9)
+  const trayH = 0.012 * k
+  const trayD = 0.06 * k
+  const trayY = -H / 2 - fw - trayH / 2
+  const tray: TrayGeometry = { x: 0, w: trayW, top: trayY + trayH / 2, z: trayD * 0.42 - d, k }
+  return { d, fw, fd, trayW, trayH, trayD, trayY, tray }
+}
 
 /**
  * Glossy melamine whiteboard with a thin aluminum frame, a marker tray on the
@@ -35,7 +50,15 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
       text: new TextBatch('whiteboard-text'),
       strokes,
       strokeMat,
+      // Soft shadow the board casts on the wall behind it.
+      shadow: new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ map: boardShadowTexture(), transparent: true, depthWrite: false })),
+      // Glossy sheen + faint ghosting of old, erased writing.
+      sheen: new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ transparent: true, depthWrite: false })),
     }
+    r.shadow.raycast = () => {}
+    r.sheen.raycast = () => {}
+    r.shadow.renderOrder = -4
+    r.sheen.renderOrder = -2
     r.board.renderOrder = -3
     r.marks.renderOrder = -2
     return r
@@ -49,6 +72,8 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
       res.pad.dispose()
       res.text.dispose()
       res.strokes.geometry.dispose()
+      res.shadow.geometry.dispose()
+      res.sheen.geometry.dispose()
     },
     [res],
   )
@@ -62,9 +87,7 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
 
   useLayoutEffect(() => {
     const [W, H] = size
-    const d = 0.016 * k
-    const fw = 0.02 * k // frame width
-    const fd = 0.03 * k
+    const { d, fw, fd, trayW, trayH, trayD, trayY } = whiteboardFrame(W, H, k)
     const op = opacity
     // Solid parts only blend while faded (tracking loss / skin switch).
     for (const b of [res.board, res.metal, res.plastic]) (b.mesh.material as { transparent: boolean }).transparent = op < 0.999
@@ -72,36 +95,51 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
     res.board.push({ x: 0, y: 0, z: -d / 2, w: W, h: H, r: 0.004 * k, d, color: palette.board, alpha: op })
     res.board.end()
 
+    // Shadow on the wall: offset down a little, as if lit from the ceiling.
+    const sm = 0.09 * k
+    res.shadow.scale.set((W + 2 * fw) * 1.52 + sm, (H + 2 * fw) * 1.52 + sm, 1)
+    res.shadow.position.set(0, -0.022 * k, -d - fd / 2 - 0.002)
+    ;(res.shadow.material as MeshBasicMaterial).opacity = 0.55 * op
+    const sheenMat = res.sheen.material as MeshBasicMaterial
+    sheenMat.map = boardSheenTexture(W / H)
+    sheenMat.opacity = op
+    sheenMat.needsUpdate = true
+    res.sheen.scale.set(W, H, 1)
+    res.sheen.position.set(0, 0, 0.0002)
+
+    // Anodized aluminum frame: an outer rail, a brighter chamfer catching the light, and a dark seam against the melamine.
     res.metal.begin()
-    res.metal.push({ x: 0, y: H / 2 + fw / 2, z: -d + fd / 2, w: W + 2 * fw, h: fw, r: 0.004 * k, d: fd, color: palette.frame, alpha: op })
-    res.metal.push({ x: 0, y: -H / 2 - fw / 2, z: -d + fd / 2, w: W + 2 * fw, h: fw, r: 0.004 * k, d: fd, color: palette.frame, alpha: op })
-    res.metal.push({ x: -W / 2 - fw / 2, y: 0, z: -d + fd / 2, w: fw, h: H, r: 0.004 * k, d: fd, color: palette.frame, alpha: op })
-    res.metal.push({ x: W / 2 + fw / 2, y: 0, z: -d + fd / 2, w: fw, h: H, r: 0.004 * k, d: fd, color: palette.frame, alpha: op })
+    const rail = (x: number, y: number, w: number, h: number, horizontal: boolean) => {
+      res.metal.push({ x, y, z: -d + fd / 2, w, h, r: 0.004 * k, d: fd, color: palette.frame, alpha: op })
+      const cw = horizontal ? w - fw : fw * 0.32
+      const ch = horizontal ? fw * 0.32 : h - fw
+      const inward = horizontal ? (y > 0 ? -1 : 1) : x > 0 ? -1 : 1
+      const cx = horizontal ? x : x + inward * fw * 0.3
+      const cy = horizontal ? y + inward * fw * 0.3 : y
+      res.metal.push({ x: cx, y: cy, z: -d + fd + 0.0004, w: cw, h: ch, r: 0.0015 * k, d: 0.0012, color: palette.frameLight, alpha: op })
+      const sx = horizontal ? x : x + inward * fw * 0.5
+      const sy = horizontal ? y + inward * fw * 0.5 : y
+      res.metal.push({ x: sx, y: sy, z: 0.0001, w: horizontal ? w - 2 * fw : 0.0018 * k, h: horizontal ? 0.0018 * k : h - 2 * fw, r: 0.0006, d: 0.002, color: palette.frameDark, alpha: op })
+    }
+    rail(0, H / 2 + fw / 2, W + 2 * fw, fw, true)
+    rail(0, -H / 2 - fw / 2, W + 2 * fw, fw, true)
+    rail(-W / 2 - fw / 2, 0, fw, H, false)
+    rail(W / 2 + fw / 2, 0, fw, H, false)
     res.metal.end()
 
     res.plastic.begin()
-    // Corner caps.
+    // Molded corner caps.
     for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-      res.plastic.push({ x: sx * (W / 2 + fw / 2), y: sy * (H / 2 + fw / 2), z: -d + fd / 2 + 0.001, w: fw * 1.5, h: fw * 1.5, r: fw * 0.5, d: fd * 1.08, color: palette.corner, alpha: op })
+      res.plastic.push({ x: sx * (W / 2 + fw / 2), y: sy * (H / 2 + fw / 2), z: -d + fd / 2 + 0.001, w: fw * 1.6, h: fw * 1.6, r: fw * 0.62, d: fd * 1.12, color: palette.corner, alpha: op })
+      res.plastic.push({ x: sx * (W / 2 + fw / 2), y: sy * (H / 2 + fw / 2), z: -d + fd * 1.12 + 0.0012, w: fw * 0.5, h: fw * 0.5, r: fw * 0.25, d: 0.001, color: palette.cornerScrew, alpha: op })
     }
-    // Marker tray along the bottom edge, with three markers and an eraser.
-    const trayW = Math.min(W * 0.5, 0.8)
-    const trayH = 0.012 * k
-    const trayD = 0.055 * k
-    const trayY = -H / 2 - fw - trayH / 2
+    // Marker tray: a ledge with a raised front lip and molded end caps. The tools themselves are live objects (Tools.tsx).
     res.plastic.push({ x: 0, y: trayY, z: trayD / 2 - d, w: trayW, h: trayH, r: 0.003 * k, d: trayD, color: palette.frame, alpha: op })
-    res.plastic.push({ x: 0, y: trayY + trayH * 0.9, z: trayD - d - 0.002 * k, w: trayW, h: trayH * 0.9, r: 0.002 * k, d: 0.004 * k, color: palette.frameDark, alpha: op })
-    const mk = [palette.ink, palette.blue, palette.red]
-    const mh = 0.016 * k
-    mk.forEach((c, i) => {
-      const x = -trayW / 2 + trayW * 0.18 + i * 0.16 * k
-      const my = trayY + trayH / 2 + mh / 2
-      const mz = trayD * 0.45 - d
-      res.plastic.push({ x, y: my, z: mz, w: 0.13 * k, h: mh, r: mh / 2, d: mh, color: '#f2f2f0', alpha: op })
-      res.plastic.push({ x: x + 0.05 * k, y: my, z: mz + 0.0005, w: 0.035 * k, h: mh * 1.08, r: mh / 2, d: mh * 1.08, color: c, alpha: op })
-    })
-    res.plastic.push({ x: trayW / 2 - 0.08 * k, y: trayY + trayH / 2 + 0.013 * k, z: trayD * 0.45 - d, w: 0.1 * k, h: 0.026 * k, r: 0.004 * k, d: 0.04 * k, color: '#2d3748', alpha: op })
-    res.plastic.push({ x: trayW / 2 - 0.08 * k, y: trayY + trayH / 2 + 0.003 * k, z: trayD * 0.45 - d, w: 0.1 * k, h: 0.006 * k, r: 0.002 * k, d: 0.041 * k, color: '#e7e2d6', alpha: op })
+    res.plastic.push({ x: 0, y: trayY + trayH * 0.95, z: trayD - d - 0.003 * k, w: trayW, h: trayH * 1.1, r: 0.002 * k, d: 0.005 * k, color: palette.frameLight, alpha: op })
+    res.plastic.push({ x: 0, y: trayY + trayH * 0.5 + 0.0004, z: trayD * 0.45 - d, w: trayW - 0.012 * k, h: 0.0008, r: 0.0004, d: trayD * 0.8, color: palette.trayFloor, alpha: op })
+    for (const sx of [-1, 1]) {
+      res.plastic.push({ x: sx * (trayW / 2 + 0.006 * k), y: trayY + trayH * 0.4, z: trayD / 2 - d, w: 0.014 * k, h: trayH * 2.1, r: 0.004 * k, d: trayD * 1.04, color: palette.corner, alpha: op })
+    }
     res.plastic.end()
 
     // Ink: headings, separators, bin box, WIP circles.
@@ -204,15 +242,19 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
     res.marks.end()
   })
 
+  const { tray } = whiteboardFrame(size[0], size[1], k)
   return (
     <group>
+      <primitive object={res.shadow} />
       <primitive object={res.board.root} />
+      <primitive object={res.sheen} />
       <primitive object={res.metal.root} />
       <primitive object={res.plastic.root} />
       <primitive object={res.marks.root} />
       <primitive object={res.strokes} />
       <primitive object={res.pad.root} />
       <primitive object={res.text.root} />
+      <WhiteboardTools size={size} tray={tray} opacity={opacity} />
     </group>
   )
 }

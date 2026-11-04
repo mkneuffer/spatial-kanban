@@ -19,9 +19,12 @@ export const BOARD_WHITE = '#fbfbf7'
 export function whiteboardPalette(highContrast: boolean) {
   return {
     board: BOARD_WHITE,
-    frame: '#c8ccd2',
-    frameDark: '#8d939b',
-    corner: '#3a3f46',
+    frame: '#c3c8cf',
+    frameLight: '#e6e9ed',
+    frameDark: '#7d838c',
+    corner: '#33383f',
+    cornerScrew: '#9aa1aa',
+    trayFloor: '#aeb4bc',
     ink: highContrast ? '#000000' : '#23262b',
     inkMuted: highContrast ? '#1a1a1a' : '#4a4f57',
     noteInk: highContrast ? '#000000' : '#1d1c24',

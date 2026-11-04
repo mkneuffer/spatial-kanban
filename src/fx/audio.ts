@@ -15,6 +15,9 @@ export type SoundName =
   | 'key'
   | 'chime'
   | 'pop'
+  | 'scribble'
+  | 'wipe'
+  | 'uncap'
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
@@ -147,6 +150,17 @@ export function playSound(name: SoundName) {
       break
     case 'pop':
       tone(520, 980, 0.08, 0.003, 0.05, 'sine')
+      break
+    case 'scribble':
+      // A short felt-tip squeak; played in quick succession while the nib moves.
+      noise('bandpass', 2600 + Math.random() * 1400, 3400 + Math.random() * 1800, 6, 0.05, 0.01, 0.06)
+      break
+    case 'wipe':
+      noise('lowpass', 900, 500, 0.6, 0.07, 0.02, 0.09)
+      break
+    case 'uncap':
+      tone(700, 1500, 0.06, 0.002, 0.03, 'triangle')
+      noise('highpass', 3000, 6000, 0.7, 0.05, 0.001, 0.025)
       break
   }
 }

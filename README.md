@@ -15,6 +15,7 @@ The product and technical plan is in [PLAN.md](PLAN.md). This README covers what
 - **Anchor anywhere.** Wall, desk (tilted like a drafting table), or float. Desk and floating boards can be tilted: drag the hinge on the top edge, or use the menu. The ghost board snaps to detected surfaces: semantically labeled planes from Quest Space Setup first, then hit-test normals, then manual placement.
 - **The board stays put.** On Meta Quest the board is saved with a persistent anchor and comes back where you left it. If the room changed, you get "Board not found here — place it again?", with the size and skin kept.
 - **Direct manipulation.** Rays, pinch/grab, poke, touch and mouse all go through one pointer model. Pick up, drag, drop, tear a card off the board (pull it more than 12 cm away), park it in the room, throw it downward to archive it, or drop it on the bin. Create cards by pulling a blank one from the pad.
+- **Working markers.** The whiteboard's tray holds three dry-erase markers (black, red, blue) and an eraser, using the marker and eraser models from ProtoGen's Alyx-Physics project. Pinch one with a tracked hand or squeeze it with a controller, and it sits in your fingers like a pen: press the nib to the board to write. The board pushes back so the nib never sinks in, and you feel a buzz and hear a squeak while it drags. The eraser turns flat to the board and wipes, leaving faint ghosting like real dry-erase. With a mouse, touch or a far ray, click a marker and drag on the board to draw, then click the tray or press **Esc** to put it back. Ink is saved per board on this device.
 - **Two skins, switched live.** *Whiteboard* (the default) is glossy melamine with an aluminum frame, a marker tray, and paper sticky notes that peel, sway and slap down. *Projects* is a clean, GitHub-style board. Cards flip in a wave while the layout morphs between skins.
 - **Text input in XR.** The headset's system keyboard where the browser offers one (Meta Quest), otherwise a 3D keyboard, plus voice dictation (Web Speech API) where it's available.
 - **Voice commands, no AI needed.** Press "Voice" on the board (or the mic / **V** on a desktop) and say "new card fix the login bug", "move login bug to done", "rename it to …", "archive card 104" or "undo". A small grammar matches what you said against your cards and columns: by title words, number, key (ENG-12), "the first card in Done", or "it" for the card you're pointing at or just used. Everything can be undone.
@@ -36,6 +37,8 @@ Captured in mixed reality with the dev build's IWER Quest 3 emulator in the synt
 | ![Ghost board snapping to a detected wall](docs/screenshots/mr-01-placing-wall.png) | ![Whiteboard board on the wall](docs/screenshots/mr-02-wall-whiteboard.png) |
 | **Close-up** | **Projects skin** |
 | ![Close-up of sticky notes on the whiteboard](docs/screenshots/mr-03-wall-whiteboard-closeup.png) | ![Projects skin on the wall](docs/screenshots/mr-04-wall-projects.png) |
+| **Writing with the markers** | |
+| ![Marker in hand, ink on the board](docs/screenshots/mr-05-markers.png) | |
 
 ## Platform support
 
@@ -63,6 +66,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Reorder columns | Drag a column header sideways | Same | Same | Column menu |
 | Move / resize the board | Drag the bar under the board / the corner | Same | – | – |
 | Tilt the board (desk, float) | Drag the hinge above the top edge, or Menu → Tilt | Same | – | – |
+| Write / erase (Whiteboard) | Pinch or squeeze a marker or the eraser in the tray, press it to the board; let go to return it | Tap a marker, drag on the board | Click a marker, drag on the board; Esc returns it | – |
 | Menu (skins, size, settings, exit) | "Menu" on the board | HUD buttons | Top bar | Top bar |
 | Voice command | "Voice" beside Menu on the board | Mic in the top bar | Mic or **V** | Mic or **V** |
 | Edit board, columns, labels | – | – | ⋯ → Edit board | ⋯ → Edit board |
