@@ -6,7 +6,7 @@ import type { CardSlot } from '../../board/layout'
 import { useBoardRuntime } from '../../board/runtime'
 import { NEW_CARD_ID } from '../../board/drag'
 import { ChipBatch, createChipMaterial } from '../../render/chips'
-import { PaperBatch, createPaperMaterial } from '../../render/paper'
+import { PaperBatch, createPaperMaterial, onPaper } from '../../render/paper'
 import { ShadowBatch, createShadowMaterial } from '../../render/shadows'
 import { TextBatch, placeText } from '../../render/textBatch'
 import { FONTS } from '../../render/fonts'
@@ -15,13 +15,6 @@ import { useBoardStore } from '../../data/store'
 import { noteColor, STICKY_COLORS, whiteboardPalette } from './palette'
 import { noteContent, whiteboardMetrics, type WhiteboardContent } from './layout'
 import { whiteboardMotion } from './motion'
-
-/** Height of the paper at card-local y (from top), mirroring the peel in the paper shader. */
-function peelZ(curl: number, cy: number, h: number) {
-  const y01 = 1 - cy / h
-  const bend = Math.max(0, 0.55 - y01) / 0.55
-  return curl * bend * bend * h * 0.42
-}
 
 export function WhiteboardCards({ layout, highContrast, role }: CardsProps<WhiteboardContent>) {
   const runtime = useBoardRuntime()
@@ -107,25 +100,33 @@ export function WhiteboardCards({ layout, highContrast, role }: CardsProps<White
       }
       const zText = z0 + 0.0007
       const far = runtime.far
+      // Content follows the paper's curl: the resting corner curl and the peel while the note is held.
+      const W = slot.rect.w, Hn = slot.rect.h, curl = a.curl
       c.lines.forEach((_, i) => {
         const m = res.text.get(`${id}:l${i}`)
         if (!m) return
         const cy = c.textY + i * c.lineH
-        const [x, y] = cardPoint(f, c.padX, cy)
-        placeText(m, x, y, zText + peelZ(a.curl, cy + c.lineH / 2, slot.rect.h) * a.scale, a.rot, a.scale, f.sx, op)
+        // Top-anchored line: its glyphs (descenders included) hang about 1.25 em below the anchor, out to the text margin.
+        const p = onPaper(W, Hn, curl, cy, cy + c.textSize * 1.25, W - c.padX, 0)
+        const [x, y] = cardPoint(f, c.padX, cy - p.dy)
+        placeText(m, x, y, zText + p.dz * a.scale, a.rot, a.scale, f.sx, op, p.tilt, p.yScale)
       })
       for (const dot of c.dots) {
-        const [x, y] = cardPoint(f, dot.x, dot.y)
-        const lz = peelZ(a.curl, dot.y, slot.rect.h) * a.scale
-        if (!far) res.dots.push({ x, y, z: zText + lz - 0.0002, w: dot.d * a.scale * f.sx, h: dot.d * a.scale, r: dot.d, color: dot.color, alpha: op })
+        const p = onPaper(W, Hn, curl, dot.y - dot.d / 2, dot.y + dot.d / 2, dot.x + dot.d / 2, 0.5)
+        const [x, y] = cardPoint(f, dot.x, dot.y - p.dy)
+        const lz = p.dz * a.scale
+        if (!far) res.dots.push({ x, y, z: zText + lz - 0.0002, w: dot.d * a.scale * f.sx, h: dot.d * a.scale * p.yScale, r: dot.d, color: dot.color, alpha: op, rot: a.rot, tilt: p.tilt })
         const m = res.text.get(`${id}:d:${dot.id}`)
-        if (m) placeText(m, x, y, zText + lz, a.rot, a.scale, f.sx, far ? 0 : op)
+        if (m) placeText(m, x, y, zText + lz, a.rot, a.scale, f.sx, far ? 0 : op, p.tilt, p.yScale)
       }
       if (c.who) {
         const m = res.text.get(`${id}:who`)
         if (m) {
-          const [x, y] = cardPoint(f, c.who.x, c.who.y)
-          placeText(m, x, y, zText + peelZ(a.curl, c.who.y, slot.rect.h) * a.scale, a.rot, a.scale, f.sx, far ? 0 : op)
+          // Right-anchored, centered on its row: about one em tall.
+          const half = c.who.size * 0.55
+          const p = onPaper(W, Hn, curl, c.who.y - half, c.who.y + half, c.who.x, 0.5)
+          const [x, y] = cardPoint(f, c.who.x, c.who.y - p.dy)
+          placeText(m, x, y, zText + p.dz * a.scale, a.rot, a.scale, f.sx, far ? 0 : op, p.tilt, p.yScale)
         }
       }
     },

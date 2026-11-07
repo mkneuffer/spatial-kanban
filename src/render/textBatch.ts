@@ -116,10 +116,10 @@ export class TextBatch {
   }
 }
 
-/** Place a member in batch-local space. */
-export function placeText(m: TextMember, x: number, y: number, z: number, rot = 0, scale = 1, sx = 1, opacity = 1) {
+/** Place a member in batch-local space. `tilt` turns it about its own x axis first (text on a curled note). */
+export function placeText(m: TextMember, x: number, y: number, z: number, rot = 0, scale = 1, sx = 1, opacity = 1, tilt = 0, sy = 1) {
   m.position.set(x, y, z)
-  m.rotation.set(0, 0, rot)
-  m.scale.set(scale * sx, scale, scale)
+  m.rotation.set(tilt, 0, rot, 'ZYX')
+  m.scale.set(scale * sx, scale * sy, scale)
   m.fillOpacity = opacity
 }

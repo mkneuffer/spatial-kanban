@@ -63,6 +63,47 @@ diffuseColor.rgb *= mix(0.93, 1.0, smoothstep(0.86, 0.8, vY01));
 diffuseColor.rgb *= 1.0 - clamp(vCurl * 6.0, 0.0, 0.12);
 `
 
+/**
+ * Where the curled paper is, mirroring the vertex shader above, so anything drawn on a note can follow it.
+ * `x01`, `y01` are 0..1 across the note (y01 = 1 at the top); `w`, `h` its size. Returns how far the surface
+ * has lifted toward the viewer (`dz`) and slid up the note (`dy`), in the note's own (unscaled) units.
+ */
+export function paperSurface(w: number, h: number, curl: number, x01: number, y01: number): { dz: number; dy: number } {
+  const bend = Math.max(0, 0.55 - y01) / 0.55
+  const peel = curl * bend * bend * h * 0.42
+  const cx = Math.max(0, x01 - 0.72) / 0.28
+  const cy = Math.max(0, 0.26 - y01) / 0.26
+  const corner = Math.pow(cx * cy, 1.6) * w * 0.05
+  return { dz: peel + corner, dy: peel * 0.35 * bend }
+}
+
+/**
+ * How a flat piece of the note's content (a text line, a label dot, the initials) lies on the curled paper:
+ * the piece spans card-local y from `top` to `bottom` (from the note's top) and reaches `right` across.
+ * It is lifted to the paper, slid up with it, and tilted to the paper's slope between its top and bottom
+ * edges. The peel is convex, so that slope keeps the whole piece on or just above the paper, never behind it.
+ * `anchor` is where the piece is held: 0 at its top edge (top-anchored text), 0.5 at its middle.
+ */
+export function onPaper(w: number, h: number, curl: number, top: number, bottom: number, right: number, anchor: number) {
+  const x01 = Math.min(1, right / w)
+  const t = paperSurface(w, h, curl, x01, 1 - top / h)
+  const b = paperSurface(w, h, curl, x01, 1 - bottom / h)
+  const span = Math.max(1e-6, bottom - top)
+  // Where the paper actually is: each point also slides up the note by dy, more toward the bottom, so the peel
+  // is shorter and steeper than its lift alone. Fit the piece between its edges' rendered positions.
+  const down = Math.max(1e-6, span - (b.dy - t.dy))
+  const rise = b.dz - t.dz
+  return {
+    // Lift at the anchor, and the anchor's card-local y after the paper slid up (+y up = −cy).
+    dz: t.dz + rise * anchor,
+    dy: t.dy + (b.dy - t.dy) * anchor,
+    // Lower edge rises toward the viewer: rotate the piece's −y end out of the board.
+    tilt: -Math.atan2(rise, down),
+    // The piece's height on the paper there, relative to flat (the paper bunches up slightly as it slides).
+    yScale: Math.hypot(down, rise) / span,
+  }
+}
+
 export function createPaperMaterial() {
   const m = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: DoubleSide })
   m.onBeforeCompile = (shader) => {
