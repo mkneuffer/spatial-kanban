@@ -64,3 +64,17 @@ describe('on-board drag depth', () => {
     expect(onBoardDragZ('mouse', 0, lift)).toBe(lift)
   })
 })
+
+describe('XR buttons and pinches (regressions)', () => {
+  it('a pressed button never sinks behind the panel it sits on', async () => {
+    const { BUTTON_PRESS_DEPTH, PANEL_CONTROL_LIFT } = await import('../../src/ui/xr/primitives')
+    // The press depth used to be 3 mm against a 1 mm lift: after ~100 ms of pressing, the ray hit the panel
+    // instead and the press was dropped before release, so slow pinches and trigger presses did nothing.
+    expect(BUTTON_PRESS_DEPTH).toBeLessThan(PANEL_CONTROL_LIFT)
+  })
+  it('a pinch waits a few frames for the pinch-grab pointer, then falls back to the hand ray', async () => {
+    const { PINCH_DELIVER_FRAMES } = await import('../../src/xr/hands/nearField')
+    expect(PINCH_DELIVER_FRAMES).toBeGreaterThanOrEqual(1)
+    expect(PINCH_DELIVER_FRAMES).toBeLessThanOrEqual(5)
+  })
+})

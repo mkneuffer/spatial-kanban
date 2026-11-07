@@ -29,6 +29,8 @@ export const POKE_CLICK_MS = 600
 export const PINCH_FORMING = 0.035
 /** Thumb–index tip gap above which the hand reads as pointing: poke switches on (m). */
 export const POINTING = 0.05
+/** Frames a pinch waits for the pinch-grab pointer to become the hand's active pointer before the hand ray takes it. */
+export const PINCH_DELIVER_FRAMES = 3
 /** Hand rays start past the near-field grab sphere so there is no dead zone between them (m). */
 export const HAND_RAY_MIN_DISTANCE = 0.1
 

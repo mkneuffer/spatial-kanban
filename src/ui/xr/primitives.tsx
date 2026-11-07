@@ -77,12 +77,14 @@ export function Panel({
       {/* The panel swallows pointer events so rays don't fall through to the board. */}
       <mesh
         geometry={roundedRectGeometry(width, height, radius)}
+        // Loses to its own controls: a pinch or fingertip near a button often reaches the panel around it too.
+        pointerEventsOrder={-1}
         onPointerDown={interactive ? (e) => e.stopPropagation() : undefined}
         raycast={interactive ? undefined : () => {}}
       >
         <meshBasicMaterial color={color} transparent opacity={opacity} depthWrite={false} />
       </mesh>
-      <group position={[0, 0, 0.001]}>{children}</group>
+      <group position={[0, 0, PANEL_CONTROL_LIFT]}>{children}</group>
     </group>
   )
 }
@@ -157,24 +159,31 @@ function usePress(onActivate: (e: XPointerEvent) => void, disabled = false) {
       const e = raw as XPointerEvent
       hovering.current.delete(e.pointerId)
       if (hovering.current.size === 0) setHover(false)
-      if (pressedBy.current === e.pointerId) release()
+      // A captured press doesn't end on leave (see onPointerDown); only a release or cancel ends it.
     },
     onPointerDown: (raw: unknown) => {
       const e = raw as XPointerEvent
       e.stopPropagation()
       if (disabled || !isPrimaryButton(e) || pressedBy.current !== null) return
       pressedBy.current = e.pointerId
+      // Keep the press on this control until release: a ray that jitters, a pinch that drifts or a fingertip
+      // that slides while pressing must not drop it (Quest pinches often take longer than a tap).
+      e.target.setPointerCapture?.(e.pointerId)
       setPressed(true)
     },
     onPointerUp: (raw: unknown) => {
       const e = raw as XPointerEvent
       e.stopPropagation()
       if (pressedBy.current !== e.pointerId) return
+      e.target.releasePointerCapture?.(e.pointerId)
       release()
       if (!disabled) onActivate(e)
     },
     onPointerCancel: (raw: unknown) => {
-      if (pressedBy.current === (raw as XPointerEvent).pointerId) release()
+      const e = raw as XPointerEvent
+      if (pressedBy.current !== e.pointerId) return
+      e.target.releasePointerCapture?.(e.pointerId)
+      release()
     },
   }
   return { hover: hover && !disabled, pressed, handlers }
@@ -194,6 +203,11 @@ export interface ButtonProps {
   icon?: ReactNode
   ariaLabel?: string
 }
+
+/** How far a pressed button sinks (m). Less than its 1 mm lift off a panel, so it never goes behind it. */
+export const BUTTON_PRESS_DEPTH = 0.0006
+/** How far a panel's controls sit in front of the panel (m). */
+export const PANEL_CONTROL_LIFT = 0.001
 
 /** A pressable 3D button: hover highlight, press depth, click sound and haptic tick. */
 export function Button3D({
@@ -226,7 +240,9 @@ export function Button3D({
   useFrame((_, dt) => {
     const g = group.current
     if (!g) return
-    const tz = pressed ? -0.003 : hover ? 0.003 : 0
+    // Press depth stays shallow: a button sits 1 mm in front of its panel, and a deeper press used to sink it
+    // behind the panel, so the ray hit the panel instead and the press was dropped before release.
+    const tz = pressed ? -BUTTON_PRESS_DEPTH : hover ? 0.003 : 0
     g.position.z += (tz - g.position.z) * Math.min(1, dt * 20)
   })
 
