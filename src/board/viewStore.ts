@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ID } from '../data/model'
 import { IDLE, type DragState } from './drag'
+import type { InkTool } from './ink'
 
 export type ViewMode = '2d' | '3d' | 'xr'
 
@@ -38,6 +39,8 @@ export interface ViewState {
   fontsVersion: number
   /** Cards just archived, animating into the bin. */
   leaving: Record<ID, number>
+  /** Marker or eraser picked up from the whiteboard tray: presses draw (or erase) instead of moving cards. */
+  tool: InkTool | null
   set(changes: Partial<Omit<ViewState, 'set' | 'setScroll' | 'select'>>): void
   setScroll(columnId: ID, value: number): void
   /**
@@ -60,6 +63,7 @@ export const useView = create<ViewState>()((set) => ({
   skinSwitch: null,
   fontsVersion: 0,
   leaving: {},
+  tool: null,
   set: (changes) => set(changes),
   setScroll: (columnId, value) => set((s) => ({ scroll: { ...s.scroll, [columnId]: value } })),
   select: (cardId) =>

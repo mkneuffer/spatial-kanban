@@ -1,4 +1,4 @@
-import type { Board, BoardDoc, Card, Column, ID, Label } from './model'
+import type { Board, BoardDoc, Card, Column, ID, InkStroke, Label } from './model'
 import { cardsInColumn, keyForIndex } from './ordering'
 
 /**
@@ -20,6 +20,11 @@ export type BoardAction =
   | { type: 'label/upsert'; label: Label }
   | { type: 'label/delete'; id: ID }
   | { type: 'doc/replace'; doc: BoardDoc }
+  /** Whiteboard marker ink: add one stroke, erase some, or wipe the board clean. */
+  | { type: 'ink/add'; stroke: InkStroke }
+  /** Removes `ids`; `add` holds the pieces left of strokes the eraser cut through. */
+  | { type: 'ink/erase'; ids: ID[]; add?: InkStroke[] }
+  | { type: 'ink/clear' }
   /** Changes pulled from a linked online board (integrations). */
   | { type: 'sync/apply'; board?: Board; columns?: Column[]; cards?: Card[] }
 
@@ -126,6 +131,22 @@ export function applyAction(draft: BoardDoc, action: BoardAction, now: string): 
         if (card.labelIds.includes(action.id)) card.labelIds = card.labelIds.filter((l) => l !== action.id)
       }
       draft.board.updatedAt = now
+      break
+    }
+    case 'ink/add': {
+      if (action.stroke.points.length < 2) return
+      ;(draft.board.ink ??= []).push({ ...action.stroke, points: [...action.stroke.points] })
+      break
+    }
+    case 'ink/erase': {
+      const gone = new Set(action.ids)
+      const ink = draft.board.ink ?? []
+      if (!ink.some((s) => gone.has(s.id)) && !action.add?.length) return
+      draft.board.ink = [...ink.filter((s) => !gone.has(s.id)), ...(action.add ?? []).map((s) => ({ ...s, points: [...s.points] }))]
+      break
+    }
+    case 'ink/clear': {
+      if (draft.board.ink?.length) draft.board.ink = []
       break
     }
     case 'doc/replace': {

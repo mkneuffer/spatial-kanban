@@ -15,6 +15,8 @@ import { useView } from './viewStore'
 import { playSound } from '../fx/audio'
 import { pulse } from '../fx/haptics'
 import { onXRBackground } from '../xr/lifecycle'
+import { ulid } from '../data/ids'
+import { addPoint, eraserPad, finishStroke, inkDiff, rubOut, MARKER_WIDTH, MIN_STEP, onBoard, type TrayItem } from './ink'
 
 /** The subset of pmndrs/pointer-events' PointerEvent this layer relies on. */
 export interface XPointerEvent {
@@ -187,6 +189,11 @@ export function BoardInteraction({ layout, skin }: Props) {
     () => () => {
       const v = useView.getState()
       if (v.drag.phase !== 'idle' || v.columnDrag) v.set({ drag: IDLE, columnDrag: null })
+      // Put the marker back: a half-drawn stroke can't be finished from the 2D board.
+      if (v.tool) v.set({ tool: null })
+      runtime.ink.draft = null
+      runtime.ink.erasing = null
+      runtime.ink.pointerId = null
       runtime.animator.delete(NEW_CARD_ID)
       runtime.hoverCards.clear()
       runtime.hoverColumns.clear()
@@ -232,8 +239,112 @@ export function BoardInteraction({ layout, skin }: Props) {
     return v.drag.phase !== 'idle' || v.columnDrag !== null
   }
 
+  // ——— Marker ink: with a marker or the eraser in hand, presses anywhere on the board draw or erase ———
+  const inkState = runtime.ink
+  const bumpInk = () => {
+    inkState.version++
+  }
+  const inkCursor = (e: XPointerEvent) => {
+    if (!runtime.root) return null
+    const p = eventToBoard(e, runtime.root, layout.size)
+    if (!p) return null
+    const c = inkState.cursor
+    c.u = p.u
+    c.v = p.v
+    c.visible = onBoard(p.u, p.v, layout.size)
+    // Hands and controllers touching the board (not rays) lift the pen when they pull away.
+    if (inkState.pointerId === e.pointerId && p.z > 0.02 * layout.k) return null
+    bumpInk()
+    return p
+  }
+  const eraseUnder = (u: number, v: number) => {
+    const current = inkState.erasing ?? useBoardStore.getState().doc.board.ink ?? []
+    const { strokes, changed } = rubOut(current, eraserPad(u, v, layout.k), layout.size, ulid)
+    if (changed) inkState.erasing = strokes
+  }
+  /** Returns true when the press was taken by the tool in hand. */
+  const inkDown = (e: XPointerEvent): boolean => {
+    const tool = useView.getState().tool
+    if (!tool || !runtime.root || !isPrimaryButton(e)) return false
+    e.stopPropagation()
+    if (inkState.pointerId !== null || busy()) return true
+    const p = pressToBoard(e, runtime.root, layout.size)
+    if (!onBoard(p.u, p.v, layout.size)) return true
+    e.target.setPointerCapture?.(e.pointerId)
+    gamepad.current = gamepadOf(e)
+    lockCamera(true)
+    inkState.pointerId = e.pointerId
+    inkState.cursor = { u: p.u, v: p.v, down: true, visible: true }
+    if (tool.kind === 'marker') {
+      inkState.draft = { color: tool.color, width: (MARKER_WIDTH * layout.k) / layout.size[0], points: [] }
+      addPoint(inkState.draft.points, p.u, p.v, layout.size, 0)
+    } else {
+      inkState.erasing = null
+      eraseUnder(p.u, p.v)
+    }
+    pulse(gamepad.current, 'tick')
+    bumpInk()
+    return true
+  }
+  const inkMove = (e: XPointerEvent): boolean => {
+    if (!useView.getState().tool) return false
+    const p = inkCursor(e)
+    if (inkState.pointerId !== e.pointerId) return false
+    e.stopPropagation()
+    if (!p || !onBoard(p.u, p.v, layout.size)) return true
+    const draft = inkState.draft
+    if (draft) addPoint(draft.points, p.u, p.v, layout.size, MIN_STEP * layout.k)
+    else eraseUnder(p.u, p.v)
+    return true
+  }
+  const inkUp = (e: XPointerEvent, cancelled = false): boolean => {
+    if (inkState.pointerId !== e.pointerId) return false
+    e.stopPropagation?.()
+    e.target?.releasePointerCapture?.(e.pointerId)
+    lockCamera(false)
+    const draft = inkState.draft
+    const store = useBoardStore.getState()
+    if (draft && !cancelled && draft.points.length >= 2) {
+      store.dispatch({ type: 'ink/add', stroke: { id: ulid(), color: draft.color, width: draft.width, points: finishStroke(draft.points, draft.width) } })
+    } else if (!draft && !cancelled && inkState.erasing) {
+      const { ids, add } = inkDiff(store.doc.board.ink ?? [], inkState.erasing)
+      if (ids.length || add.length) {
+        store.dispatch({ type: 'ink/erase', ids, add })
+        playSound('peel')
+      }
+    }
+    inkState.draft = null
+    inkState.erasing = null
+    inkState.pointerId = null
+    inkState.cursor.down = false
+    bumpInk()
+    return true
+  }
+  const inkLeave = (e: XPointerEvent) => {
+    if (inkState.pointerId === null && useView.getState().tool) {
+      inkState.cursor.visible = false
+      bumpInk()
+    }
+    void e
+  }
+
+  /** Tap a marker (or the eraser) in the tray to pick it up; tap its empty slot again to put it back. */
+  const onTrayDown = (item: TrayItem) => (raw: unknown) => {
+    const e = raw as XPointerEvent
+    if (!isPrimaryButton(e) || busy() || inkState.pointerId !== null) return
+    e.stopPropagation()
+    const v = useView.getState()
+    const putBack = v.tool?.id === item.id
+    v.set({ tool: putBack ? null : { id: item.id, kind: item.kind, color: item.color } })
+    if (putBack) inkState.cursor.visible = false
+    playSound(putBack ? 'drop' : 'pop')
+    pulse(gamepadOf(e), putBack ? 'tick' : 'firm')
+    bumpInk()
+  }
+
   const onCardDown = (id: ID) => (raw: unknown) => {
     const e = raw as XPointerEvent
+    if (inkDown(e)) return
     if (!runtime.root || !isPrimaryButton(e) || busy()) return
     e.stopPropagation()
     e.target.setPointerCapture?.(e.pointerId)
@@ -263,6 +374,7 @@ export function BoardInteraction({ layout, skin }: Props) {
 
   const onPadDown = (raw: unknown) => {
     const e = raw as XPointerEvent
+    if (inkDown(e)) return
     if (!runtime.root || !isPrimaryButton(e) || busy()) return
     e.stopPropagation()
     e.target.setPointerCapture?.(e.pointerId)
@@ -292,6 +404,7 @@ export function BoardInteraction({ layout, skin }: Props) {
 
   const onMove = (raw: unknown) => {
     const e = raw as XPointerEvent
+    if (inkMove(e)) return
     const drag = useView.getState().drag
     if (!runtime.root || drag.phase === 'idle' || drag.pointerId !== e.pointerId) return
     e.stopPropagation()
@@ -301,6 +414,7 @@ export function BoardInteraction({ layout, skin }: Props) {
 
   const onUp = (raw: unknown) => {
     const e = raw as XPointerEvent
+    if (inkUp(e)) return
     const drag = useView.getState().drag
     if (!runtime.root || drag.phase === 'idle' || drag.pointerId !== e.pointerId) return
     e.stopPropagation()
@@ -313,6 +427,7 @@ export function BoardInteraction({ layout, skin }: Props) {
 
   const onCancel = (raw: unknown) => {
     const e = raw as XPointerEvent
+    if (inkUp(e, true)) return
     const drag = useView.getState().drag
     if (drag.phase === 'idle' || drag.pointerId !== e.pointerId) return
     lockCamera(false)
@@ -357,6 +472,7 @@ export function BoardInteraction({ layout, skin }: Props) {
     },
     onPointerLeave: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (!columnId) inkLeave(e)
       if (columnId && runtime.hoverColumns.get(e.pointerId)?.columnId === columnId) runtime.hoverColumns.delete(e.pointerId)
     },
     onWheel: (raw: unknown) => {
@@ -367,6 +483,7 @@ export function BoardInteraction({ layout, skin }: Props) {
     },
     onPointerDown: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (inkDown(e)) return
       if (!runtime.root || !isPrimaryButton(e) || busy() || surfacePress.current) return
       e.stopPropagation()
       e.target.setPointerCapture?.(e.pointerId)
@@ -385,6 +502,7 @@ export function BoardInteraction({ layout, skin }: Props) {
     },
     onPointerMove: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (inkMove(e)) return
       const sp = surfacePress.current
       if (!runtime.root || !sp || sp.pointerId !== e.pointerId) return
       const p = eventToBoard(e, runtime.root, layout.size)
@@ -397,6 +515,7 @@ export function BoardInteraction({ layout, skin }: Props) {
     },
     onPointerUp: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (inkUp(e)) return
       const sp = endSurfacePress(e)
       if (!sp) return
       const tap = !sp.moved && performance.now() - sp.start.t <= TAP_MAX_MS
@@ -406,6 +525,7 @@ export function BoardInteraction({ layout, skin }: Props) {
       }
     },
     onPointerCancel: (raw: unknown) => {
+      if (inkUp(raw as XPointerEvent, true)) return
       endSurfacePress(raw as XPointerEvent)
     },
   })
@@ -423,6 +543,7 @@ export function BoardInteraction({ layout, skin }: Props) {
   const headerHandlers = (columnId: ID) => ({
     onPointerDown: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (inkDown(e)) return
       if (!runtime.root || !isPrimaryButton(e) || busy()) return
       e.stopPropagation()
       e.target.setPointerCapture?.(e.pointerId)
@@ -435,6 +556,7 @@ export function BoardInteraction({ layout, skin }: Props) {
     },
     onPointerMove: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (inkMove(e)) return
       const cd = useView.getState().columnDrag
       if (!runtime.root || !cd || cd.pointerId !== e.pointerId) return
       const p = eventToBoard(e, runtime.root, layout.size)
@@ -454,6 +576,7 @@ export function BoardInteraction({ layout, skin }: Props) {
     },
     onPointerUp: (raw: unknown) => {
       const e = raw as XPointerEvent
+      if (inkUp(e)) return
       const cd = endColumnDrag(e)
       if (!cd || !cd.moved) return
       const from = layout.columns.findIndex((c) => c.id === cd.columnId)
@@ -464,6 +587,7 @@ export function BoardInteraction({ layout, skin }: Props) {
       }
     },
     onPointerCancel: (raw: unknown) => {
+      if (inkUp(raw as XPointerEvent, true)) return
       endColumnDrag(raw as XPointerEvent)
     },
   })
@@ -557,6 +681,9 @@ export function BoardInteraction({ layout, skin }: Props) {
         onPointerUp={onUp}
         onPointerCancel={onCancel}
       />
+      {layout.tray?.map((item) => (
+        <mesh key={item.id} geometry={proxyGeometry} material={proxyMaterial} userData={{ trayItem: item.id }} {...rectMesh(item.rect, 0.012 * layout.k, 0.03 * layout.k)} onPointerDown={onTrayDown(item)} />
+      ))}
       <ColumnDropMarker layout={layout} />
     </group>
   )
