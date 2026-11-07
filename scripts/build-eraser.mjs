@@ -85,8 +85,9 @@ function feltMaps(N = 512) {
   for (let i = 0; i < H.length; i++) H[i] = Math.min(1, H[i] / (m * 0.55));
   const alb = Buffer.alloc(N * N * 3), mr = Buffer.alloc(N * N * 3), nor = Buffer.alloc(N * N * 3);
   for (let i = 0; i < N * N; i++) {
-    const b = 206 + H[i] * 44 + (rnd() - 0.5) * 10;
-    alb[i * 3] = clamp(b); alb[i * 3 + 1] = clamp(b); alb[i * 3 + 2] = clamp(b - 3);
+    // Gray felt, a little warm, fibers catching lighter.
+    const b = 112 + H[i] * 44 + (rnd() - 0.5) * 12;
+    alb[i * 3] = clamp(b + 2); alb[i * 3 + 1] = clamp(b + 1); alb[i * 3 + 2] = clamp(b - 2);
     mr[i * 3] = 255; mr[i * 3 + 1] = clamp(235 + (rnd() - 0.5) * 20); mr[i * 3 + 2] = 0;
   }
   normalFrom(H, N, 4.5, nor);

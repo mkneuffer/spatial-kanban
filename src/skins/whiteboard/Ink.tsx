@@ -21,7 +21,7 @@ import { useView } from '../../board/viewStore'
 import { useBoardStore } from '../../data/store'
 import type { InkStroke } from '../../data/model'
 import type { BoardLayout } from '../../board/layout'
-import { MARKER_LENGTH, placeModel, type ToolModels } from './toolModels'
+import { MARKER_LENGTH, MARKER_TIP_OVERHANG, placeModel, postCap, type ToolModels } from './toolModels'
 import { trayGeometry, type WhiteboardContent } from './layout'
 
 /** A dry-erase marker lying in the tray: white barrel with a colored cap. */
@@ -119,10 +119,11 @@ export function TrayTools({ layout, models, opacity }: { layout: BoardLayout<Whi
     if (!id || !isMarkerId(id)) return
     const mesh = meshes[id]
     mesh.visible = toolId !== id
-    // Lying along the tray, nib to the left: the model's tip is its origin and its barrel runs up +Y.
+    // Lying along the tray, capped, nib to the left and label facing out: the model's origin is the nib tip
+    // and its barrel runs up +Y, so center the capped length on the slot.
     mesh.rotation.set(0, 0, -Math.PI / 2)
     mesh.scale.setScalar(k)
-    mesh.position.set(m.x - (MARKER_LENGTH * k) / 2, m.y, m.z)
+    mesh.position.set(m.x - (MARKER_LENGTH / 2 - MARKER_TIP_OVERHANG) * k, m.y, m.z)
   })
   // Pad down on the tray, long side along it.
   meshes.eraser.visible = toolId !== 'eraser'
@@ -193,6 +194,8 @@ export function HeldTool({ size, k, models }: { size: [number, number]; k: numbe
         }
       : null
     if (real) {
+      // Writing: the cap is posted on the back end.
+      for (const m of [real.black, real.blue, real.red]) postCap(m, true)
       marker.add(real.black, real.blue, real.red)
       eraser.add(real.eraser)
     } else {
