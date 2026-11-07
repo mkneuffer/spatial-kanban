@@ -45,7 +45,7 @@ describe('marker ink helpers', () => {
     expect(r.changed).toBe(true)
     expect(r.strokes).toHaveLength(2)
     const [left, right] = r.strokes
-    // Everything within the pad's reach (3.9 cm half length + 2.3 cm radius) is gone.
+    // Everything within the pad's reach (4 cm half length + 2.4 cm radius) is gone.
     expect(left.points.at(-2)! * 1.6).toBeLessThan(0.5 - 0.05)
     expect(right.points[0] * 1.6).toBeGreaterThan(0.5 + 0.05)
     expect(left.color).toBe(s.color)

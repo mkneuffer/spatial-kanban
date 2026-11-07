@@ -26,9 +26,9 @@ export interface InkTool {
 
 /** Marker line width in meters on the 1.6 m poster board (scaled with the board). */
 export const MARKER_WIDTH = 0.0042
-/** The eraser's felt pad (12.4 × 4.6 cm on the poster board) as a capsule: half the straight length, and the radius. */
-export const ERASER_RADIUS = 0.023
-export const ERASER_HALF = 0.039
+/** The eraser's felt pad (12.8 × 4.8 cm on the poster board) as a capsule: half the straight length, and the radius. */
+export const ERASER_RADIUS = 0.024
+export const ERASER_HALF = 0.04
 /** A new point is added once the tip has moved this far (meters, scaled). */
 export const MIN_STEP = 0.0025
 

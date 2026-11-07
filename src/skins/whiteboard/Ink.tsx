@@ -21,7 +21,7 @@ import { useView } from '../../board/viewStore'
 import { useBoardStore } from '../../data/store'
 import type { InkStroke } from '../../data/model'
 import type { BoardLayout } from '../../board/layout'
-import { MARKER_LENGTH, type ToolModels } from './toolModels'
+import { MARKER_LENGTH, placeModel, type ToolModels } from './toolModels'
 import { trayGeometry, type WhiteboardContent } from './layout'
 
 /** A dry-erase marker lying in the tray: white barrel with a colored cap. */
@@ -99,22 +99,15 @@ const INK_Z = 0.0026
 type MarkerId = keyof ToolModels['markers']
 const isMarkerId = (id: string): id is MarkerId => id === 'black' || id === 'blue' || id === 'red'
 
-function modelMesh(model: { geometry: BufferGeometry; material: Material }, name: string) {
-  const m = new Mesh(model.geometry, model.material)
-  m.name = name
-  m.raycast = () => {}
-  return m
-}
-
 /** The real markers and eraser lying in the tray (whichever is in hand is missing from its slot). */
 export function TrayTools({ layout, models, opacity }: { layout: BoardLayout<WhiteboardContent>; models: ToolModels; opacity: number }) {
   const toolId = useView((s) => s.tool?.id ?? null)
   const meshes = useMemo(
     () => ({
-      black: modelMesh(models.markers.black, 'tray-marker-black'),
-      blue: modelMesh(models.markers.blue, 'tray-marker-blue'),
-      red: modelMesh(models.markers.red, 'tray-marker-red'),
-      eraser: modelMesh(models.eraser, 'tray-eraser'),
+      black: placeModel(models.markers.black, 'tray-marker-black'),
+      blue: placeModel(models.markers.blue, 'tray-marker-blue'),
+      red: placeModel(models.markers.red, 'tray-marker-red'),
+      eraser: placeModel(models.eraser, 'tray-eraser'),
     }),
     [models],
   )
@@ -136,11 +129,15 @@ export function TrayTools({ layout, models, opacity }: { layout: BoardLayout<Whi
   meshes.eraser.rotation.set(-Math.PI / 2, 0, 0)
   meshes.eraser.scale.setScalar(k)
   meshes.eraser.position.set(g.eraser.x, g.trayTop, g.eraser.z)
-  for (const mesh of Object.values(meshes)) {
-    const mat = mesh.material as Material
-    mat.transparent = opacity < 0.999
-    mat.opacity = opacity
-  }
+  // Fade with the board (tracking loss, skin switch). Alpha-tested felt fuzz keeps its own mode.
+  for (const o of Object.values(meshes))
+    o.traverse((c) => {
+      if (!(c instanceof Mesh)) return
+      const mat = c.material as Material & { alphaTest?: number }
+      if (mat.alphaTest) return
+      mat.transparent = opacity < 0.999
+      mat.opacity = opacity
+    })
   return (
     <group>
       {Object.values(meshes).map((m) => (
@@ -189,10 +186,10 @@ export function HeldTool({ size, k, models }: { size: [number, number]; k: numbe
     const eraser = new Group()
     const real = models
       ? {
-          black: modelMesh(models.markers.black, 'held-marker-black'),
-          blue: modelMesh(models.markers.blue, 'held-marker-blue'),
-          red: modelMesh(models.markers.red, 'held-marker-red'),
-          eraser: modelMesh(models.eraser, 'held-eraser'),
+          black: placeModel(models.markers.black, 'held-marker-black'),
+          blue: placeModel(models.markers.blue, 'held-marker-blue'),
+          red: placeModel(models.markers.red, 'held-marker-red'),
+          eraser: placeModel(models.eraser, 'held-eraser'),
         }
       : null
     if (real) {
