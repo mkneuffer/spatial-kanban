@@ -130,7 +130,7 @@ export function TrayTools({ layout, models, opacity }: { layout: BoardLayout<Whi
   meshes.eraser.visible = toolId !== 'eraser'
   meshes.eraser.rotation.set(-Math.PI / 2, 0, 0)
   meshes.eraser.scale.setScalar(k)
-  meshes.eraser.position.set(g.eraser.x, g.trayTop, g.eraser.z)
+  meshes.eraser.position.set(g.eraser.x, g.trayTop + g.eraser.lift, g.eraser.z)
   // Fade with the board (tracking loss, skin switch). Alpha-tested felt fuzz keeps its own mode.
   for (const o of Object.values(meshes))
     o.traverse((c) => {
