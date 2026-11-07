@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useRef, type RefObject } from 'react'
+import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { useFrame, useLoader } from '@react-three/fiber'
 import {
   CombinedPointer,
@@ -7,7 +7,6 @@ import {
   defaultGrabPointerOpacity,
   defaultTouchPointerOpacity,
   useGrabPointer,
-  usePointerXRInputSourceEvents,
   useTouchPointer,
   useXR,
   useXRInputSourceStateContext,
@@ -20,6 +19,7 @@ import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { createHandMaterial, createOutlineMaterial, styleHandModel } from './metaDarkV6'
 import {
   HAND_RAY_MIN_DISTANCE,
+  PINCH_DELIVER_FRAMES,
   PINCH_GRAB_RADIUS,
   POKE_CLICK_MS,
   POKE_HOVER_RADIUS,
@@ -103,6 +103,8 @@ interface HandGate {
   gap: number
   /** Poke may start a press. */
   poke: boolean
+  /** A pinch (select) is held: the poke stays out of the running until it ends. */
+  pinching: boolean
 }
 
 type Space = Object3D & { transformReady?: boolean }
@@ -135,7 +137,7 @@ function useFingerSpaces(pinch: RefObject<Group | null>, tip: RefObject<Group | 
     _index.set(index.transform.position.x, index.transform.position.y, index.transform.position.z)
     _thumb.set(thumb.transform.position.x, thumb.transform.position.y, thumb.transform.position.z)
     gate.gap = _index.distanceTo(_thumb)
-    gate.poke = pokeAllowed(gate.gap, gate.poke)
+    gate.poke = !gate.pinching && pokeAllowed(gate.gap, gate.poke)
     // Express the reference-space points in the parent (target-ray) group, whose matrix
     // is whatever it currently holds, so the world result is this frame's joint pose.
     _inv.copy(p.parent!.matrix).invert()
@@ -146,10 +148,57 @@ function useFingerSpaces(pinch: RefObject<Group | null>, tip: RefObject<Group | 
   }, -60)
 }
 
-function PinchGrabPointer({ space }: { space: RefObject<Group | null> }) {
+/**
+ * Pinch grab. A pinch near a card or button must reach this pointer, but the three hand pointers take
+ * turns (the nearest hit is the active one, the others ignore input), and up close the index tip — the
+ * poke — is usually nearer the surface than the pinch point. When the pinch (`select`) arrived the poke
+ * was still active, so the pinch was dropped: direct pinch-grab and near pinches on buttons did nothing.
+ *
+ * So a pinch first takes the poke out of the running (the gate), and its press is delivered one frame
+ * later, once the pointers have re-arbitrated and this one is active. If the pinch point isn't on
+ * anything by then, the hand ray (which receives the same `select` itself) handles it as a far pinch.
+ */
+function PinchGrabPointer({ space, gate }: { space: RefObject<Group | null>; gate: HandGate }) {
   const state = useXRInputSourceStateContext('hand')
+  const session = useXR((s) => s.session)
   const pointer = useGrabPointer(space, state, { radius: PINCH_GRAB_RADIUS })
-  usePointerXRInputSourceEvents(pointer, state.inputSource, 'select', state.events)
+  const pinch = useRef<{ pending: number; down: boolean }>({ pending: 0, down: false })
+  useEffect(() => {
+    if (!session) return
+    const source = state.inputSource
+    const start = (e: XRInputSourceEvent) => {
+      if (e.inputSource !== source) return
+      gate.pinching = true
+      gate.poke = false
+      pinch.current.pending = PINCH_DELIVER_FRAMES
+    }
+    const end = (e: XRInputSourceEvent) => {
+      if (e.inputSource !== source) return
+      gate.pinching = false
+      const p = pinch.current
+      p.pending = 0
+      if (p.down) {
+        p.down = false
+        pointer.up({ timeStamp: performance.now(), button: 0 })
+      }
+    }
+    session.addEventListener('selectstart', start)
+    session.addEventListener('selectend', end)
+    return () => {
+      session.removeEventListener('selectstart', start)
+      session.removeEventListener('selectend', end)
+    }
+  }, [session, state.inputSource, pointer, gate])
+  // After the pointers moved and re-arbitrated (pmndrs moves them at -50).
+  useFrame(() => {
+    const p = pinch.current
+    if (p.pending <= 0) return
+    p.pending--
+    if (!pointer.getEnabled()) return
+    p.pending = 0
+    p.down = true
+    pointer.down({ timeStamp: performance.now(), button: 0 })
+  }, -45)
   return (
     <group ref={space} matrixAutoUpdate={false}>
       <PointerCursorModel pointer={pointer} opacity={defaultGrabPointerOpacity} />
@@ -185,10 +234,18 @@ function PokePointer({ space, gate }: { space: RefObject<Group | null>; gate: Ha
     downRadius: -1,
     clickThresholdMs: POKE_CLICK_MS,
     // Out of the running while a pinch is forming, so the pinch grab gets the card.
-    filter: () => gate.poke,
+    filter: () => gate.poke && !gate.pinching,
   })
   const pressed = useRef(false)
   useFrame(() => {
+    // A pinch takes over from a poke: reaching in to pinch a card, the fingertip usually touches it first.
+    // Cancel (not release) that press, so it neither clicks a button nor drops the card, and frees the
+    // pointer capture for the pinch grab.
+    if (gate.pinching && pressed.current) {
+      pressed.current = false
+      pointer.cancel({ timeStamp: performance.now() })
+      return
+    }
     const sample = sampleSurface(pointer.getIntersection())
     const next = pokePressed(pressed.current, { enabled: pointer.getEnabled(), allowed: gate.poke, ...sample })
     if (next === pressed.current) return
@@ -209,7 +266,7 @@ function PokePointer({ space, gate }: { space: RefObject<Group | null>; gate: Ha
  * poke, and the far-field ray. One pointer is active at a time; the nearest hit wins.
  */
 export function KanbanHand() {
-  const gate = useMemo<HandGate>(() => ({ gap: NaN, poke: false }), [])
+  const gate = useMemo<HandGate>(() => ({ gap: NaN, poke: false, pinching: false }), [])
   const pinch = useRef<Group>(null)
   const tip = useRef<Group>(null)
   useFingerSpaces(pinch, tip, gate)
@@ -219,7 +276,7 @@ export function KanbanHand() {
         <MetaDarkHandModel />
       </Suspense>
       <CombinedPointer>
-        <PinchGrabPointer space={pinch} />
+        <PinchGrabPointer space={pinch} gate={gate} />
         <PokePointer space={tip} gate={gate} />
         <DefaultXRInputSourceRayPointer makeDefault minDistance={HAND_RAY_MIN_DISTANCE} rayModel={{ maxLength: 0.2 }} />
       </CombinedPointer>
