@@ -243,7 +243,7 @@ function AnchoredBoard({ dark }: { dark: boolean }) {
   const detailCardId = useView((s) => s.detailCardId)
   const editCardId = useView((s) => s.editCardId)
   const leftHanded = useSettings((s) => s.leftHanded)
-  const phoneOverlay = useXRApp((s) => s.caps.domOverlay)
+  const phoneOverlay = useXRApp((s) => s.caps.handheld)
   const session = useXR((s) => s.session)
   const originSpace = useXR((s) => s.originReferenceSpace)
   const gl = useThree((s) => s.gl)

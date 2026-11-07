@@ -66,6 +66,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
           </li>
         ))}
       </ul>
+      <p style={{ marginTop: 14, fontSize: 12, opacity: 0.65 }}>Build {__BUILD__}</p>
     </Dialog>
   )
 }

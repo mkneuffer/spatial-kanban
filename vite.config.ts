@@ -7,6 +7,9 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 // (Or keep plain HTTP and use `adb reverse tcp:5173 tcp:5173` on Quest.)
 export default defineConfig(({ mode }) => ({
   base: process.env.BASE_PATH ?? '/',
+  // Short commit of the build (GitHub Actions / Cloudflare Pages), shown in the help dialog and the XR menu
+  // so a headset can be checked against the deploy it should be running.
+  define: { __BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? process.env.CF_PAGES_COMMIT_SHA ?? 'dev').slice(0, 7)) },
   plugins: [react(), ...(mode === 'https' ? [basicSsl()] : [])],
   server: {
     host: true,

@@ -128,6 +128,9 @@ export function BoardMenu3D({ onMove, onReplace, onPreset, onClose }: { onMove()
       <Label size={0.024} weight={700} anchorX="left" position={[-W / 2 + 0.02, titleY, 0]}>
         Board
       </Label>
+      <Label size={0.0105} color={UI.muted} anchorX="left" position={[-W / 2 + 0.1, titleY - 0.0015, 0]}>
+        {`build ${__BUILD__}`}
+      </Label>
       <Button3D label="Close" width={0.08} height={0.034} variant="ghost" position={[W / 2 - 0.055, titleY, 0]} onClick={onClose} />
       <Label size={0.013} color={UI.muted} anchorX="left" position={[-W / 2 + 0.02, skinLabelY, 0]}>
         SKIN
