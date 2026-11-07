@@ -93,10 +93,10 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
     }
     // Marker tray along the bottom edge, with three markers and an eraser (whichever is in hand is missing).
     const g = trayGeometry(size, k)
-    const { trayW, trayH, trayD, trayY, trayTop, lipD, lipH, lipBack } = g
     // Shelf, and a lip along its front edge that rises above it so the markers can't roll off.
-    res.plastic.push({ x: 0, y: trayY, z: trayD / 2 - d, w: trayW, h: trayH, r: 0.003 * k, d: trayD, color: palette.frame, alpha: op })
-    res.plastic.push({ x: 0, y: (trayY - trayH / 2 + trayTop + lipH) / 2, z: lipBack + lipD / 2, w: trayW, h: trayTop + lipH - (trayY - trayH / 2), r: 0.0015 * k, d: lipD, color: palette.frameDark, alpha: op })
+    const { shelfBox: sb, lipBox: lb } = g
+    res.plastic.push({ ...sb, r: 0.003 * k, color: palette.frame, alpha: op })
+    res.plastic.push({ ...lb, r: 0.0015 * k, color: palette.frameDark, alpha: op })
     // Simple stand-ins until the real marker and eraser models have loaded (<TrayTools> draws those).
     const tray = layout.tray ?? []
     if (!models) {

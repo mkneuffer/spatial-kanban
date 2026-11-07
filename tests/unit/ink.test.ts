@@ -155,8 +155,9 @@ describe('the tray holds its markers and eraser properly', () => {
       { x: g.eraser.x, w: g.eraser.w, bottom: g.eraser.y - g.eraser.h / 2, z0: g.eraser.z - g.eraser.d / 2, z1: g.eraser.z + g.eraser.d / 2 },
     ]
     for (const it of items) {
-      // Sitting on the shelf, neither floating nor sunk into it.
-      expect(Math.abs(it.bottom - g.trayTop)).toBeLessThan(eps)
+      // Sitting on the shelf: never sunk into it, and at most a millimetre up (the eraser rides on its felt).
+      expect(it.bottom).toBeGreaterThanOrEqual(g.trayTop - eps)
+      expect(it.bottom - g.trayTop).toBeLessThan(0.001 * k)
       // Clear of the board frame behind and the lip in front.
       expect(it.z0).toBeGreaterThan(g.frameFront)
       expect(it.z1).toBeLessThan(g.lipBack)
@@ -168,6 +169,42 @@ describe('the tray holds its markers and eraser properly', () => {
     for (let i = 0; i + 1 < items.length; i++) expect(items[i].x + items[i].w / 2).toBeLessThan(items[i + 1].x - items[i + 1].w / 2)
     // The lip stands taller than a marker's radius, so a marker can't roll off.
     expect(g.lipH).toBeGreaterThan(g.markers[0].h / 2)
+  })
+
+  it.each(sizes)('%s board: no two tray parts share a face plane (no z-fighting)', (_n, size) => {
+    const k = Math.min(size[0] / 1.6, size[1] / 1.0)
+    const g = trayGeometry(size, k)
+    type Box = { x: number; y: number; z: number; w: number; h: number; d: number }
+    const span = (b: Box, axis: 'x' | 'y' | 'z'): [number, number] => {
+      const half = { x: b.w, y: b.h, z: b.d }[axis] / 2
+      return [b[axis] - half, b[axis] + half]
+    }
+    const e = g.eraser
+    const boxes: Record<string, Box> = {
+      shelf: g.shelfBox,
+      lip: g.lipBox,
+      frame: g.frameBar,
+      // The eraser's pad face is its bottom.
+      eraser: { x: e.x, y: e.y, z: e.z, w: e.w, h: e.h, d: e.d },
+    }
+    const names = Object.keys(boxes)
+    const axes = ['x', 'y', 'z'] as const
+    for (let i = 0; i < names.length; i++)
+      for (let j = i + 1; j < names.length; j++) {
+        const A = boxes[names[i]], B = boxes[names[j]]
+        for (const axis of axes) {
+          const others = axes.filter((a) => a !== axis)
+          // Faces in the same plane only fight where they overlap in the other two axes.
+          const overlap = others.every((o) => {
+            const [a0, a1] = span(A, o), [b0, b1] = span(B, o)
+            return Math.min(a1, b1) - Math.max(a0, b0) > 1e-9
+          })
+          if (!overlap) continue
+          for (const fa of span(A, axis))
+            for (const fb of span(B, axis))
+              expect(Math.abs(fa - fb), `${names[i]} and ${names[j]} share a ${axis} plane`).toBeGreaterThan(0.0002 * k)
+        }
+      }
   })
 
   it('lays a marker clip-up along the tray (model +Z up, barrel +Y along the tray)', () => {
