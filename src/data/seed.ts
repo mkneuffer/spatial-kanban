@@ -6,10 +6,10 @@ import { ulid } from './ids'
 export const LABEL_PRESETS: Array<Pick<Label, 'name' | 'color' | 'icon'>> = [
   { name: 'bug', color: '#D55E00', icon: 'bug' },
   { name: 'feature', color: '#0072B2', icon: 'star' },
-  { name: 'design', color: '#CC79A7', icon: 'brush' },
+  { name: 'refactor', color: '#CC79A7', icon: 'brush' },
   { name: 'docs', color: '#009E73', icon: 'book' },
   { name: 'perf', color: '#E69F00', icon: 'bolt' },
-  { name: 'xr', color: '#56B4E9', icon: 'cube' },
+  { name: 'ci', color: '#56B4E9', icon: 'cube' },
 ]
 
 const PEOPLE: Person[] = [
@@ -31,28 +31,39 @@ interface SeedCard {
   description?: string
 }
 
+/** A typical development flow: triage incoming bugs, pick them up, review, verify in QA, ship. */
 const COLUMNS: Array<{ title: string; color: string; wipLimit?: number; cards: SeedCard[] }> = [
   {
-    title: 'Backlog',
+    title: 'Triage',
     color: '#8b949e',
     cards: [
-      { title: 'Room mode: spread columns across several walls', labels: ['xr', 'feature'] },
-      { title: 'Corkboard skin with push pins and yarn links', labels: ['design'] },
-      { title: 'Voice search: "show my cards"', labels: ['feature'], who: ['p-mo'] },
-      { title: 'Two-handed scale and rotate on the board frame', labels: ['xr'] },
+      {
+        title: 'App crashes on save when the title has an emoji',
+        labels: ['bug'],
+        description: 'Repro: create a note titled "Launch 🚀", press Save. Sentry shows a UnicodeEncodeError in the slug helper. Needs severity and an owner.',
+      },
+      { title: 'Dark mode: chart tooltips are unreadable', labels: ['bug'] },
+      {
+        title: 'Flaky test: checkout e2e times out on CI',
+        labels: ['bug', 'ci'],
+        description: 'Fails about 1 in 8 runs, only on CI. Likely waits on a network call instead of the confirmation element.',
+      },
+      { title: 'Upgrade to Node 24 LTS', labels: ['refactor', 'ci'] },
     ],
   },
   {
     title: 'Ready',
     color: '#2f81f7',
     cards: [
-      { title: 'Throw a card downward to archive it', labels: ['xr', 'feature'], who: ['p-kenji'] },
-      { title: 'Document the Quest on-device testing loop', labels: ['docs'], who: ['p-luis'], due: 6, deadline: 10 },
       {
-        title: 'LOD: drop avatars and labels beyond 3 m',
-        labels: ['perf'],
-        description: 'Keep wall mode readable from across the room by showing only titles and color blocks when the board is far away.',
+        title: 'Password reset link expires after 5 minutes',
+        labels: ['bug'],
+        who: ['p-luis'],
+        due: 3,
+        description: 'Token TTL is read in seconds but configured in minutes. Expected: 60 minutes. Add a regression test for the TTL parsing.',
       },
+      { title: 'Rate limit the public API', labels: ['feature'], who: ['p-kenji'] },
+      { title: 'Write the on-call runbook for payment failures', labels: ['docs'], who: ['p-priya'], due: 6, deadline: 10 },
     ],
   },
   {
@@ -61,14 +72,19 @@ const COLUMNS: Array<{ title: string; color: string; wipLimit?: number; cards: S
     wipLimit: 3,
     cards: [
       {
-        title: 'Snap the ghost board to detected walls',
-        labels: ['xr'],
+        title: 'Fix memory leak in the websocket reconnect loop',
+        labels: ['bug', 'perf'],
         who: ['p-ada'],
         due: 2,
-        description: 'Classify hit-test normals, prefer semantically labeled planes, then smooth the ghost pose with a critically damped spring.',
+        description: 'Each reconnect adds a new message listener without removing the old one. Heap grows ~4 MB per hour on idle tabs. Remove listeners on close and add a heap snapshot check.',
       },
-      { title: 'Sticky-note peel and slap animation', labels: ['design', 'xr'], who: ['p-priya', 'p-ada'] },
-      { title: 'Instanced card bodies and batched SDF text', labels: ['perf'], who: ['p-kenji'], due: 4 },
+      {
+        title: 'Login redirect loop on Safari after the session expires',
+        labels: ['bug'],
+        who: ['p-kenji', 'p-mo'],
+        description: 'Safari blocks the refresh cookie (SameSite=None missing), so the auth guard keeps redirecting to /login.',
+      },
+      { title: 'Extract the billing module from the monolith', labels: ['refactor'], who: ['p-priya'], due: 5 },
     ],
   },
   {
@@ -76,17 +92,36 @@ const COLUMNS: Array<{ title: string; color: string; wipLimit?: number; cards: S
     color: '#a371f7',
     wipLimit: 3,
     cards: [
-      { title: 'Fix card flicker at column edges', labels: ['bug'], who: ['p-luis'], description: 'Add 2 cm of hysteresis so the target column does not flicker while dragging along a boundary.' },
-      { title: 'Persist placements per device in IndexedDB', labels: ['feature'], who: ['p-mo'] },
+      {
+        title: 'Fix off-by-one in search pagination',
+        labels: ['bug'],
+        who: ['p-luis'],
+        description: 'Page 2 repeats the last result of page 1. The offset used (page × size) − 1. PR includes unit tests for the first, middle and last page.',
+      },
+      { title: 'Cache user profile lookups (p95 840 ms → 120 ms)', labels: ['perf'], who: ['p-mo'] },
+    ],
+  },
+  {
+    title: 'QA',
+    color: '#db61a2',
+    wipLimit: 4,
+    cards: [
+      {
+        title: 'Login button submits twice on slow networks',
+        labels: ['bug'],
+        who: ['p-ada'],
+        description: 'Fixed by disabling the button while the request is pending. Verify on throttled 3G in Chrome and Safari.',
+      },
+      { title: 'CSV export drops rows with commas in names', labels: ['bug'], who: ['p-luis'] },
     ],
   },
   {
     title: 'Done',
     color: '#3fb950',
     cards: [
-      { title: 'Fractional order keys for conflict-free moves', labels: ['feature'], who: ['p-kenji'] },
-      { title: 'Color-blind-safe label palette with icons', labels: ['design', 'docs'], who: ['p-priya'] },
-      { title: 'Enter immersive-ar with passthrough on Quest', labels: ['xr'], who: ['p-ada'] },
+      { title: 'Run lint, typecheck and unit tests on every PR', labels: ['ci'], who: ['p-kenji'] },
+      { title: 'Hotfix: 500 error when checking out an empty cart', labels: ['bug'], who: ['p-mo'] },
+      { title: 'Add a bug report template to the repo', labels: ['docs'], who: ['p-priya'] },
     ],
   },
 ]
@@ -129,7 +164,7 @@ export function createDemoBoard(now: Date = new Date()): BoardDoc {
   }
 
   return {
-    board: { id: boardId, title: 'Spatial Kanban — launch', columnIds, labels, createdAt: iso, updatedAt: iso },
+    board: { id: boardId, title: 'Web app — sprint 14', columnIds, labels, createdAt: iso, updatedAt: iso },
     columns,
     cards,
   }
