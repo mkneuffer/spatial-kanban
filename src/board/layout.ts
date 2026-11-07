@@ -1,3 +1,4 @@
+import type { TrayItem } from './ink'
 import type { BoardDoc, Card, Column, ID } from '../data/model'
 import { cardsInColumn } from '../data/ordering'
 import type { Rect } from './space'
@@ -66,6 +67,8 @@ export interface BoardLayout<C = unknown> {
   newCardSize: [number, number]
   /** Where the dragged card will land (drop indicator), if it has a target. */
   placeholder: (Rect & { columnId: ID }) | null
+  /** Markers and eraser you can pick up (whiteboard only). */
+  tray?: TrayItem[]
 }
 
 export interface DragGap {

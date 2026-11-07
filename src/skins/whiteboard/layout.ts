@@ -13,6 +13,10 @@ import {
 import { hash01 } from '../../board/space'
 import { wrapText, type TextMeasure } from '../../board/text'
 import { initials } from '../projects/layout'
+import { toBoard } from '../../board/space'
+import type { TrayItem } from '../../board/ink'
+import { whiteboardPalette } from './palette'
+import { ERASER_SIZE, MARKER_LENGTH, MARKER_RADIUS } from './toolModels'
 
 export interface WhiteboardContent {
   lines: string[]
@@ -37,9 +41,11 @@ export function whiteboardMetrics(k: number) {
     noteGap: 0.012 * k,
     maxNote: 0.125 * k,
     minNote2Up: 0.085 * k,
-    notePad: 0.01 * k,
-    textSize: 0.025 * k,
-    minTextSize: 0.0185 * k,
+    notePad: 0.009 * k,
+    /** Short titles are written big; long ones shrink down to the minimum before they're cut. */
+    textSize: 0.029 * k,
+    minTextSize: 0.0135 * k,
+    lineH: 1.02,
     headerSize: 0.034 * k,
     boardTitleSize: 0.04 * k,
     dotD: 0.015 * k,
@@ -53,20 +59,10 @@ export type WhiteboardMetrics = ReturnType<typeof whiteboardMetrics>
 export function noteContent(card: Card, doc: BoardDoc, s: number, M: WhiteboardMetrics, measure: TextMeasure): WhiteboardContent {
   const innerW = s - 2 * M.notePad
   const labels = card.labelIds.map((id) => doc.board.labels.find((l) => l.id === id)).filter(Boolean)
-  const bottomRow = labels.length || card.assignees.length ? M.dotD * 1.6 : 0
+  const bottomRow = labels.length || card.assignees.length ? M.dotD * 1.35 : 0
   const availH = s - 2 * M.notePad - bottomRow
-  // Write smaller when the title is long, like a person would.
-  let size = M.textSize
-  let lines: string[] = []
-  for (;;) {
-    const lineH = size * 1.08
-    const maxLines = Math.max(1, Math.floor(availH / lineH))
-    lines = wrapText(card.title || '…', innerW, measure, 'Caveat', size, maxLines, 700)
-    const complete = !lines[lines.length - 1]?.endsWith('…')
-    if (complete || size <= M.minTextSize) break
-    size = Math.max(M.minTextSize, size * 0.9)
-  }
-  const lineH = size * 1.08
+  const { lines, size } = fitTitle(card.title || '…', innerW, availH, M, measure)
+  const lineH = size * M.lineH
   const dots = labels.slice(0, 4).map((l, i) => ({
     id: l!.id,
     letter: l!.name[0]?.toUpperCase() ?? '',
@@ -83,7 +79,83 @@ export function noteContent(card: Card, doc: BoardDoc, s: number, M: WhiteboardM
         size: M.dotD * 1.45,
       }
     : undefined
-  return { lines, textSize: size, lineH, textY: M.notePad, dots, who, padX: M.notePad }
+  // Centre the block in the space left above the dots, so a short title doesn't hug the top edge.
+  const used = (lines.length - 1) * lineH + size * 1.1
+  const textY = M.notePad + Math.max(0, (availH - used) / 2) * 0.8
+  return { lines, textSize: size, lineH, textY, dots, who, padX: M.notePad }
+}
+
+/**
+ * The largest handwriting at which the whole title fits the note, like a person
+ * who writes smaller when there's more to say. Words are never split across
+ * lines unless a single word is wider than the note at the smallest size;
+ * only then is the title cut with an ellipsis.
+ */
+export function fitTitle(title: string, innerW: number, availH: number, M: WhiteboardMetrics, measure: TextMeasure): { lines: string[]; size: number } {
+  const words = title.trim().split(/\s+/).join(' ')
+  const at = (size: number) => {
+    const maxLines = Math.max(1, Math.floor((availH + size * (M.lineH - 1)) / (size * M.lineH)))
+    return wrapText(title, innerW, measure, 'Caveat', size, maxLines, 700)
+  }
+  for (let size = M.textSize; size > M.minTextSize; size *= 0.94) {
+    const lines = at(size)
+    // Whole words only: an ellipsis or a mid-word break means it doesn't really fit.
+    if (lines.join(' ') === words) return { lines, size }
+  }
+  return { lines: at(M.minTextSize), size: M.minTextSize }
+}
+
+/**
+ * Marker tray under the board's bottom edge: the tray itself, three markers and
+ * an eraser, in board-local 3D coordinates (origin at the board center, y up).
+ * Shared by the surface (drawing) and the layout (hit areas), so they always agree.
+ */
+export function trayGeometry(size: readonly [number, number], k: number) {
+  const [W, H] = size
+  const d = 0.016 * k // board thickness
+  const fw = 0.02 * k // frame width
+  const fd = 0.03 * k // frame depth: the frame stands this far proud of the board's back
+  const trayW = Math.min(W * 0.5, 0.8)
+  const trayH = 0.012 * k // shelf thickness
+  const lipD = 0.004 * k
+  const lipH = trayH * 0.9 // how far the front lip rises above the shelf
+  // The shelf runs from the frame's front face out to the lip, deep enough for the eraser with room to spare.
+  const frameFront = -d + fd
+  const shelf = 0.064 * k
+  const trayD = fd + shelf + lipD // the tray hangs from the board's back, under the frame
+  const lipBack = -d + trayD - lipD
+  const trayY = -H / 2 - fw - trayH / 2
+  const trayTop = trayY + trayH / 2
+  // Capped markers lie against the lip, clip up; the eraser sits pad-down in the middle of the shelf, beside them.
+  const mw = MARKER_LENGTH * k
+  const mh = MARKER_RADIUS * 2 * k
+  const gap = 0.002 * k
+  const mz = lipBack - mh / 2 - gap
+  const markers = [0, 1, 2].map((i) => ({ x: -trayW / 2 + trayW * 0.18 + i * 0.16 * k, y: trayTop + mh / 2, z: mz, w: mw, h: mh }))
+  const eh = ERASER_SIZE.height * k
+  const ed = ERASER_SIZE.h * k
+  const eraser = { x: trayW / 2 - 0.08 * k, y: trayTop + eh / 2, z: (frameFront + lipBack) / 2, w: ERASER_SIZE.w * k, h: eh, d: ed }
+  return { d, fw, fd, trayW, trayH, trayD, trayY, trayTop, lipD, lipH, lipBack, frameFront, markers, eraser }
+}
+
+export const MARKER_IDS = ['black', 'blue', 'red'] as const
+
+/** The tray's markers and eraser as pick-up targets, in board space. */
+export function trayItems(size: [number, number], k: number, highContrast = false): TrayItem[] {
+  const g = trayGeometry(size, k)
+  const p = whiteboardPalette(highContrast)
+  const colors = [p.ink, p.blue, p.red]
+  // Hit areas are a little taller than the markers so they're easy to point at.
+  const rect = (x: number, y: number, w: number, h: number) => {
+    const { u, v } = toBoard(x, y, size)
+    // Never reach up onto the writing surface: a press there must draw, not grab a marker.
+    const top = Math.max(size[1], v - h / 2)
+    return { x: u - w / 2, y: top, w, h: v + h / 2 - top }
+  }
+  return [
+    ...g.markers.map((m, i) => ({ id: MARKER_IDS[i], kind: 'marker' as const, color: colors[i], rect: rect(m.x, m.y, m.w, m.h * 1.8), z: m.z, depth: m.h * 1.6 })),
+    { id: 'eraser', kind: 'eraser' as const, color: '#2d3748', rect: rect(g.eraser.x, g.eraser.y, g.eraser.w, g.eraser.h * 1.3), z: g.eraser.z, depth: g.eraser.d },
+  ]
 }
 
 export function noteGrid(colW: number, M: WhiteboardMetrics) {
@@ -159,6 +231,7 @@ export function whiteboardLayout({ doc, size, options }: LayoutInput): BoardLayo
     corner: frame.corner,
     newCardSize: [s, s],
     placeholder,
+    tray: trayItems(size, k, options.highContrast),
   }
 }
 

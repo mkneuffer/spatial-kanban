@@ -11,7 +11,10 @@ import { toLocal, type Rect } from '../../board/space'
 import { useBoardStore } from '../../data/store'
 import { usePlacements } from '../../data/placements'
 import { markerInk, STICKY_COLORS, whiteboardPalette } from './palette'
-import { whiteboardMetrics, type WhiteboardContent } from './layout'
+import { trayGeometry, whiteboardMetrics, type WhiteboardContent } from './layout'
+import { useView } from '../../board/viewStore'
+import { InkLayer, HeldTool, TrayTools, pushEraser, pushMarker } from './Ink'
+import { useToolModels } from './toolModels'
 
 /**
  * Glossy melamine whiteboard with a thin aluminum frame, a marker tray on the
@@ -21,6 +24,10 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
   const palette = useMemo(() => whiteboardPalette(highContrast), [highContrast])
   const title = useBoardStore((s) => s.doc.board.title)
   const freeCards = usePlacements((s) => s.freeCards)
+  const toolId = useView((s) => s.tool?.id ?? null)
+  const models = useToolModels()
+  // The tray belongs to this skin: switching skins puts the marker back.
+  useEffect(() => () => useView.getState().set({ tool: null }), [])
   const res = useMemo(() => {
     const strokeMat = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide, transparent: true })
     const strokes = new Mesh(new BufferGeometry(), strokeMat)
@@ -84,24 +91,22 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
     for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
       res.plastic.push({ x: sx * (W / 2 + fw / 2), y: sy * (H / 2 + fw / 2), z: -d + fd / 2 + 0.001, w: fw * 1.5, h: fw * 1.5, r: fw * 0.5, d: fd * 1.08, color: palette.corner, alpha: op })
     }
-    // Marker tray along the bottom edge, with three markers and an eraser.
-    const trayW = Math.min(W * 0.5, 0.8)
-    const trayH = 0.012 * k
-    const trayD = 0.055 * k
-    const trayY = -H / 2 - fw - trayH / 2
+    // Marker tray along the bottom edge, with three markers and an eraser (whichever is in hand is missing).
+    const g = trayGeometry(size, k)
+    const { trayW, trayH, trayD, trayY, trayTop, lipD, lipH, lipBack } = g
+    // Shelf, and a lip along its front edge that rises above it so the markers can't roll off.
     res.plastic.push({ x: 0, y: trayY, z: trayD / 2 - d, w: trayW, h: trayH, r: 0.003 * k, d: trayD, color: palette.frame, alpha: op })
-    res.plastic.push({ x: 0, y: trayY + trayH * 0.9, z: trayD - d - 0.002 * k, w: trayW, h: trayH * 0.9, r: 0.002 * k, d: 0.004 * k, color: palette.frameDark, alpha: op })
-    const mk = [palette.ink, palette.blue, palette.red]
-    const mh = 0.016 * k
-    mk.forEach((c, i) => {
-      const x = -trayW / 2 + trayW * 0.18 + i * 0.16 * k
-      const my = trayY + trayH / 2 + mh / 2
-      const mz = trayD * 0.45 - d
-      res.plastic.push({ x, y: my, z: mz, w: 0.13 * k, h: mh, r: mh / 2, d: mh, color: '#f2f2f0', alpha: op })
-      res.plastic.push({ x: x + 0.05 * k, y: my, z: mz + 0.0005, w: 0.035 * k, h: mh * 1.08, r: mh / 2, d: mh * 1.08, color: c, alpha: op })
-    })
-    res.plastic.push({ x: trayW / 2 - 0.08 * k, y: trayY + trayH / 2 + 0.013 * k, z: trayD * 0.45 - d, w: 0.1 * k, h: 0.026 * k, r: 0.004 * k, d: 0.04 * k, color: '#2d3748', alpha: op })
-    res.plastic.push({ x: trayW / 2 - 0.08 * k, y: trayY + trayH / 2 + 0.003 * k, z: trayD * 0.45 - d, w: 0.1 * k, h: 0.006 * k, r: 0.002 * k, d: 0.041 * k, color: '#e7e2d6', alpha: op })
+    res.plastic.push({ x: 0, y: (trayY - trayH / 2 + trayTop + lipH) / 2, z: lipBack + lipD / 2, w: trayW, h: trayTop + lipH - (trayY - trayH / 2), r: 0.0015 * k, d: lipD, color: palette.frameDark, alpha: op })
+    // Simple stand-ins until the real marker and eraser models have loaded (<TrayTools> draws those).
+    const tray = layout.tray ?? []
+    if (!models) {
+      g.markers.forEach((m, i) => {
+        const item = tray[i]
+        if (!item || item.id === toolId) return
+        pushMarker(res.plastic, m.x, m.y, m.z, m.w, m.h, item.color, op)
+      })
+      if (toolId !== 'eraser') pushEraser(res.plastic, g.eraser.x, g.eraser.y, g.eraser.z, g.eraser.w, g.eraser.h, g.eraser.d, op)
+    }
     res.plastic.end()
 
     // Ink: headings, separators, bin box, WIP circles.
@@ -184,7 +189,7 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
     }
     res.pad.end()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, palette, opacity, targetColumnId, overBin, padActive, title, freeCards])
+  }, [layout, palette, opacity, targetColumnId, overBin, padActive, title, freeCards, toolId, models])
 
   // Per frame: highlighter over the target column and the drop placeholder.
   useFrame(() => {
@@ -213,6 +218,9 @@ export function WhiteboardSurface({ layout, highContrast, opacity, targetColumnI
       <primitive object={res.strokes} />
       <primitive object={res.pad.root} />
       <primitive object={res.text.root} />
+      <InkLayer size={size} k={k} opacity={opacity} />
+      {models && <TrayTools layout={layout} models={models} opacity={opacity} />}
+      <HeldTool size={size} k={k} models={models} />
     </group>
   )
 }

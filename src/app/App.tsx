@@ -73,6 +73,8 @@ export function App() {
       } else if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault()
         useBoardStore.getState().redo()
+      } else if (e.key === 'Escape' && useView.getState().tool) {
+        useView.getState().set({ tool: null })
       } else if (e.key === '?') setDialog('help')
       else if (!mod && !e.altKey && e.key.toLowerCase() === 'v' && useVoice.getState().supported) {
         e.preventDefault()
@@ -97,9 +99,7 @@ export function App() {
         </div>
         {!ready && <div className="loading">Loading your board…</div>}
         {ready && mode === '2d' && <FlatBoard dark={dark} />}
-        {ready && mode === '3d' && (
-          <div className="canvas-hint">Drag cards between columns · drag the pad to create · scroll a column · drag empty space to orbit</div>
-        )}
+        {ready && mode === '3d' && <CanvasHint />}
       </main>
       {mode !== 'xr' && <CardDrawer dark={dark} />}
       {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
@@ -113,6 +113,24 @@ export function App() {
           ▶ Workstation
         </a>
       )}
+    </div>
+  )
+}
+
+function CanvasHint() {
+  const tool = useView((s) => s.tool)
+  const skinId = useSettings((s) => s.skinId)
+  if (tool) {
+    const what = tool.kind === 'eraser' ? 'Rub out ink with the eraser' : 'Draw on the board with the marker'
+    return (
+      <div className="canvas-hint" role="status">
+        {what} · tap its slot in the tray (or press Esc) to put it back
+      </div>
+    )
+  }
+  return (
+    <div className="canvas-hint">
+      Drag cards between columns · drag the pad to create{skinId === 'whiteboard' ? ' · pick up a marker from the tray to draw' : ''} · drag empty space to orbit
     </div>
   )
 }
@@ -207,6 +225,7 @@ function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
   const settings = useSettings()
   const ref = useRef<HTMLDivElement>(null)
   const file = useRef<HTMLInputElement>(null)
+  const hasInk = useBoardStore((s) => (s.doc.board.ink?.length ?? 0) > 0)
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
@@ -282,6 +301,11 @@ function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
           <button className="item" role="menuitem" onClick={() => (onDialog('archived'), setOpen(false))}>
             Archived cards…
           </button>
+          {hasInk && (
+            <button className="item" role="menuitem" onClick={() => (useBoardStore.getState().dispatch({ type: 'ink/clear' }), setOpen(false))}>
+              Erase all marker ink
+            </button>
+          )}
           <button className="item" role="menuitem" onClick={exportBoard}>
             Export board (JSON)
           </button>

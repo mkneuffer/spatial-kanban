@@ -15,6 +15,20 @@ export interface Board {
   updatedAt: string
   /** Set when the board mirrors a board in an online tool (GitHub Projects, Trello, …). */
   integration?: BoardIntegration
+  /** Freehand marker ink drawn on the whiteboard (local only; never pushed to a linked tool). */
+  ink?: InkStroke[]
+}
+
+/**
+ * One marker stroke. Points are a flat [u0, v0, u1, v1, …] list in board units
+ * (0..1 of the board's width and height), so ink stays put when the board is resized.
+ */
+export interface InkStroke {
+  id: ID
+  color: string
+  /** Line width as a fraction of the board width. */
+  width: number
+  points: number[]
 }
 
 export type ProviderId = 'github' | 'trello' | 'linear' | 'jira'

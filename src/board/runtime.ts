@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { Group } from 'three'
-import type { ID } from '../data/model'
+import type { ID, InkStroke } from '../data/model'
 import { Animator } from './animator'
 import type { BoardLayout, CardSlot } from './layout'
 import type { TextMeasure } from './text'
@@ -32,6 +32,21 @@ export interface BoardRuntime {
   hoverColumns: Map<number, { columnId: ID; source: XRInputSource | null }>
   /** Particle effects (no-ops until <BoardEffects> mounts, and under reduced motion). */
   fx: BoardFX
+  /** Marker ink in progress (per frame, never in React state). */
+  ink: InkRuntime
+}
+
+export interface InkRuntime {
+  /** The stroke being drawn (board units), until the pen lifts. */
+  draft: { color: string; width: number; points: number[] } | null
+  /** The ink as the eraser has left it during the current press (committed on release, as one undo step). */
+  erasing: InkStroke[] | null
+  /** Pointer drawing or erasing right now. */
+  pointerId: number | null
+  /** Where the tool in hand is over the board (board meters), and whether it touches the surface. */
+  cursor: { u: number; v: number; down: boolean; visible: boolean }
+  /** Bumped on every change so renderers rebuild only when needed. */
+  version: number
 }
 
 const noFX: BoardFX = { land() {}, lift() {}, celebrate() {}, archive() {}, spawn() {}, sweep() {} }
@@ -51,6 +66,7 @@ export function createRuntime(measure: TextMeasure): BoardRuntime {
     hoverCards: new Map(),
     hoverColumns: new Map(),
     fx: noFX,
+    ink: { draft: null, erasing: null, pointerId: null, cursor: { u: 0, v: 0, down: false, visible: false }, version: 0 },
   }
 }
 
