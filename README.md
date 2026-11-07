@@ -6,6 +6,8 @@ Open the page, press **Enter AR**, stick the board to a wall, lay it on your des
 
 **Live:** https://mneuffer-protogen.github.io/spatial-kanban/
 
+The help dialog (**?**) and the XR board menu show the short commit of the build you're running; GitHub Pages caches the page for up to ten minutes after a deploy, so reload if it's behind.
+
 The product and technical plan is in [PLAN.md](PLAN.md). This README covers what's built, how to run it, and how it's put together.
 
 ---
@@ -36,7 +38,7 @@ Features are detected at runtime (`isSessionSupported`, `session.enabledFeatures
 | Platform | Experience |
 |---|---|
 | Meta Quest 3 / 3S / Pro (Quest Browser) | `immersive-ar` passthrough, plane + hit-test snapping, persistent anchors, hands and controllers |
-| Android Chrome (ARCore) | `immersive-ar` with a DOM-overlay HUD, hit-test placement, touch drag. The board is placed again each session |
+| Android Chrome (ARCore) | `immersive-ar` with a DOM-overlay HUD, hit-test placement, touch drag. The board is placed again each session. (The HUD is handheld-only: headsets never request a DOM overlay, since one would swallow their presses) |
 | Apple Vision Pro (Safari) | `immersive-vr` in a calm virtual room, float placement, gaze + pinch through transient pointers |
 | Desktop browsers | 3D view (orbit, drag cards with the mouse) and the 2D board |
 | iOS Safari / no WebXR | 2D board and 3D view |

@@ -11,12 +11,13 @@ import { CardDrawer } from '../ui/flat/CardDrawer'
 
 /**
  * Handheld AR HUD via the DOM overlay (PLAN §3: phone AR is the one place a
- * small screen-locked HUD is allowed). Only shown when the session has a DOM overlay.
+ * small screen-locked HUD is allowed). Only shown when the session's DOM overlay is a phone screen.
  */
 export function XRPhoneHud({ onChoose }: { onChoose(mode: PlacementMode): void }) {
-  const domOverlay = useXRApp((s) => s.caps.domOverlay)
+  // Handheld only: a headset can grant a DOM overlay too (Quest Browser does), as a quad in front of the user.
+  const handheld = useXRApp((s) => s.caps.handheld)
   const mode = useXR((s) => s.mode)
-  if (!domOverlay || mode !== 'immersive-ar') return null
+  if (!handheld || mode !== 'immersive-ar') return null
   return (
     <XRDomOverlay>
       <HudContent onChoose={onChoose} />

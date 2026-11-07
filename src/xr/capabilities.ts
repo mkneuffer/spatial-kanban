@@ -23,6 +23,8 @@ export interface SessionCapabilities {
   meshes: boolean
   hands: boolean
   domOverlay: boolean
+  /** Handheld AR (a phone): the DOM overlay is the screen, so the screen HUD and 2D drawer apply. */
+  handheld: boolean
   layers: boolean
 }
 
@@ -35,7 +37,29 @@ export const EMPTY_SESSION_CAPS: SessionCapabilities = {
   meshes: false,
   hands: false,
   domOverlay: false,
+  handheld: false,
   layers: false,
+}
+
+/**
+ * A DOM overlay of type "screen" is a phone's screen. Headsets grant `dom-overlay` too (Quest Browser does
+ * in immersive-ar) but show it as a floating or head-locked quad in front of the user, which is not a place
+ * for the phone HUD.
+ */
+export function isHandheldOverlay(type: string | undefined | null): boolean {
+  return type === 'screen'
+}
+
+/**
+ * Whether an AR session should ask for a DOM overlay at all. Only handheld AR (immersive-ar without
+ * immersive-vr) uses the screen HUD. On a headset the overlay is a quad between the user and the scene,
+ * and the browser swallows any press whose ray lands on overlay content (`beforexrselect`), so the 3D
+ * menus behind it never receive the select. Until the device has been detected, assume a phone so one
+ * never loses its HUD.
+ */
+export function wantsDomOverlay(caps: Pick<DeviceCapabilities, 'checked' | 'immersiveAR' | 'immersiveVR'>): boolean {
+  if (!caps.checked) return true
+  return caps.immersiveAR && !caps.immersiveVR
 }
 
 export const useDeviceCaps = create<DeviceCapabilities>()(() => ({
@@ -73,6 +97,7 @@ export function detectSessionCapabilities(session: XRSession, mode: XRSessionMod
   const has = (feature: string, probe: boolean) => (enabled.size > 0 ? enabled.has(feature) : probe)
   const s = session as PersistentAnchorSession
   const anchorsApi = typeof XRFrame !== 'undefined' && 'createAnchor' in XRFrame.prototype
+  const overlayType = (session as XRSession & { domOverlayState?: { type?: string } | null }).domOverlayState?.type
   return {
     mode,
     hitTest: has('hit-test', typeof session.requestHitTestSource === 'function'),
@@ -81,7 +106,8 @@ export function detectSessionCapabilities(session: XRSession, mode: XRSessionMod
     planes: has('plane-detection', false),
     meshes: has('mesh-detection', false),
     hands: has('hand-tracking', false),
-    domOverlay: has('dom-overlay', false) || !!(session as XRSession & { domOverlayState?: unknown }).domOverlayState,
+    domOverlay: has('dom-overlay', false) || overlayType != null,
+    handheld: isHandheldOverlay(overlayType),
     layers: has('layers', false),
   }
 }

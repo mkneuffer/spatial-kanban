@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import type { PlacementMode } from '../data/model'
 import { useView, type ViewMode } from '../board/viewStore'
 import { unlockAudio } from '../fx/audio'
-import { detectSessionCapabilities, EMPTY_SESSION_CAPS, type SessionCapabilities } from './capabilities'
+import { detectSessionCapabilities, EMPTY_SESSION_CAPS, useDeviceCaps, wantsDomOverlay, type SessionCapabilities } from './capabilities'
 import { attachSessionLifecycle, listenForPageVisibility, releaseForBackground } from './lifecycle'
 import { KanbanHand } from './hands/KanbanHand'
 
@@ -13,7 +13,12 @@ import { KanbanHand } from './hands/KanbanHand'
  * widest range of devices (PLAN §10); `session.enabledFeatures` then fills the
  * capabilities object.
  */
-export const xrStore = createXRStore({
+/**
+ * Store options. pmndrs reads this object again on every `requestSession`, so `domOverlay` is decided
+ * per session in `enterXR` (phones get the screen HUD; headsets must not get an overlay quad that
+ * swallows their presses, see `wantsDomOverlay`).
+ */
+const xrOptions: NonNullable<Parameters<typeof createXRStore>[0]> = {
   offerSession: false,
   enterGrantedSession: false,
   // Dev emulation is installed by ./emulator (IWER), which also handles embedded browsers.
@@ -31,7 +36,8 @@ export const xrStore = createXRStore({
   // Meta Dark v6 hands with pinch-point grab and a working fingertip poke (see ./hands).
   hand: KanbanHand,
   controller: { teleportPointer: false, rayPointer: true, grabPointer: true },
-})
+}
+export const xrStore = createXRStore(xrOptions)
 
 export type XRPhase =
   | 'inactive'
@@ -118,6 +124,7 @@ export async function enterXR(mode: 'immersive-ar' | 'immersive-vr') {
   useXRApp.getState().set({ returnMode: view.mode === 'xr' ? '3d' : view.mode })
   // Mount the XR scene before requesting the session.
   view.set({ mode: 'xr', detailCardId: null })
+  xrOptions.domOverlay = mode === 'immersive-ar' && wantsDomOverlay(useDeviceCaps.getState())
   try {
     const session = mode === 'immersive-ar' ? await xrStore.enterAR() : await xrStore.enterVR()
     if (!session) throw new Error('The browser did not start an XR session.')
