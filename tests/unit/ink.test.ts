@@ -3,7 +3,8 @@ import { addPoint, eraserPad, finishStroke, inkDiff, rubOut, toUnits } from '../
 import { useBoardStore } from '../../src/data/store'
 import { createDemoBoard } from '../../src/data/seed'
 import type { InkStroke } from '../../src/data/model'
-import { fitTitle, trayItems, whiteboardLayout, whiteboardMetrics } from '../../src/skins/whiteboard/layout'
+import { fitTitle, trayGeometry, trayItems, whiteboardLayout, whiteboardMetrics } from '../../src/skins/whiteboard/layout'
+import { Euler, Quaternion, Vector3 } from 'three'
 import { approximateMeasure } from '../../src/board/text'
 
 const size: [number, number] = [1.6, 1]
@@ -136,5 +137,44 @@ describe('whiteboard tray and note text', () => {
     const essay = fitTitle('word '.repeat(80).trim(), innerW, availH, M, approximateMeasure)
     expect(essay.size).toBe(M.minTextSize)
     expect(essay.lines.at(-1)!.endsWith('…')).toBe(true)
+  })
+})
+
+describe('the tray holds its markers and eraser properly', () => {
+  const sizes: Array<[string, [number, number]]> = [
+    ['poster', [1.6, 1.0]],
+    ['desk', [0.9, 0.56]],
+    ['compact', [0.6, 0.38]],
+  ]
+  it.each(sizes)('%s board: everything rests on the shelf, in front of the frame and behind the lip', (_n, size) => {
+    const k = Math.min(size[0] / 1.6, size[1] / 1.0)
+    const g = trayGeometry(size, k)
+    const eps = 1e-9
+    const items = [
+      ...g.markers.map((m) => ({ x: m.x, w: m.w, bottom: m.y - m.h / 2, z0: m.z - m.h / 2, z1: m.z + m.h / 2 })),
+      { x: g.eraser.x, w: g.eraser.w, bottom: g.eraser.y - g.eraser.h / 2, z0: g.eraser.z - g.eraser.d / 2, z1: g.eraser.z + g.eraser.d / 2 },
+    ]
+    for (const it of items) {
+      // Sitting on the shelf, neither floating nor sunk into it.
+      expect(Math.abs(it.bottom - g.trayTop)).toBeLessThan(eps)
+      // Clear of the board frame behind and the lip in front.
+      expect(it.z0).toBeGreaterThan(g.frameFront)
+      expect(it.z1).toBeLessThan(g.lipBack)
+      // Within the tray's length.
+      expect(it.x - it.w / 2).toBeGreaterThan(-g.trayW / 2)
+      expect(it.x + it.w / 2).toBeLessThan(g.trayW / 2)
+    }
+    // Side by side without touching.
+    for (let i = 0; i + 1 < items.length; i++) expect(items[i].x + items[i].w / 2).toBeLessThan(items[i + 1].x - items[i + 1].w / 2)
+    // The lip stands taller than a marker's radius, so a marker can't roll off.
+    expect(g.lipH).toBeGreaterThan(g.markers[0].h / 2)
+  })
+
+  it('lays a marker clip-up along the tray (model +Z up, barrel +Y along the tray)', () => {
+    const q = new Quaternion().setFromEuler(new Euler(0, -Math.PI / 2, -Math.PI / 2, 'ZYX'))
+    const up = new Vector3(0, 0, 1).applyQuaternion(q)
+    const along = new Vector3(0, 1, 0).applyQuaternion(q)
+    expect(up.y).toBeCloseTo(1)
+    expect(along.x).toBeCloseTo(1)
   })
 })

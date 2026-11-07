@@ -682,7 +682,7 @@ export function BoardInteraction({ layout, skin }: Props) {
         onPointerCancel={onCancel}
       />
       {layout.tray?.map((item) => (
-        <mesh key={item.id} geometry={proxyGeometry} material={proxyMaterial} userData={{ trayItem: item.id }} {...rectMesh(item.rect, 0.012 * layout.k, 0.03 * layout.k)} onPointerDown={onTrayDown(item)} />
+        <mesh key={item.id} geometry={proxyGeometry} material={proxyMaterial} userData={{ trayItem: item.id }} {...rectMesh(item.rect, item.z, item.depth)} onPointerDown={onTrayDown(item)} />
       ))}
       <ColumnDropMarker layout={layout} />
     </group>

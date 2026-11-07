@@ -28,7 +28,7 @@ export const MARKER_LENGTH = 0.1327
 /** How far the cap's dome reaches past the nib tip (the model's origin). */
 export const MARKER_TIP_OVERHANG = 0.0042
 /** Radius of the cap, the widest part. */
-export const MARKER_RADIUS = 0.0081
+export const MARKER_RADIUS = 0.00815
 export const ERASER_SIZE = { w: 0.13, h: 0.05, height: 0.0323 }
 
 const MARKER_NODES = { black: 'Marker_Black', blue: 'Marker_Blue', red: 'Marker_Red' } as const

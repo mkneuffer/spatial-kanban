@@ -15,6 +15,9 @@ export interface TrayItem {
   color: string
   /** Board space (meters, v down). The tray hangs below the board, so v > height. */
   rect: Rect
+  /** Board-local depth of its center (+z out of the board) and its extent in z, for the hit area. */
+  z: number
+  depth: number
 }
 
 /** The tool in hand: one of the tray's markers, or the eraser. */

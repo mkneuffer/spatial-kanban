@@ -114,19 +114,28 @@ export function trayGeometry(size: readonly [number, number], k: number) {
   const [W, H] = size
   const d = 0.016 * k // board thickness
   const fw = 0.02 * k // frame width
+  const fd = 0.03 * k // frame depth: the frame stands this far proud of the board's back
   const trayW = Math.min(W * 0.5, 0.8)
-  const trayH = 0.012 * k
-  const trayD = 0.055 * k
+  const trayH = 0.012 * k // shelf thickness
+  const lipD = 0.004 * k
+  const lipH = trayH * 0.9 // how far the front lip rises above the shelf
+  // The shelf runs from the frame's front face out to the lip, deep enough for the eraser with room to spare.
+  const frameFront = -d + fd
+  const shelf = 0.064 * k
+  const trayD = fd + shelf + lipD // the tray hangs from the board's back, under the frame
+  const lipBack = -d + trayD - lipD
   const trayY = -H / 2 - fw - trayH / 2
   const trayTop = trayY + trayH / 2
-  // Real dry-erase markers lying in the tray (14.65 cm × 2.1 cm, scaled with the board), and the eraser pad-down beside them.
+  // Capped markers lie against the lip, clip up; the eraser sits pad-down in the middle of the shelf, beside them.
   const mw = MARKER_LENGTH * k
   const mh = MARKER_RADIUS * 2 * k
-  const mz = trayD * 0.45 - d
+  const gap = 0.002 * k
+  const mz = lipBack - mh / 2 - gap
   const markers = [0, 1, 2].map((i) => ({ x: -trayW / 2 + trayW * 0.18 + i * 0.16 * k, y: trayTop + mh / 2, z: mz, w: mw, h: mh }))
   const eh = ERASER_SIZE.height * k
-  const eraser = { x: trayW / 2 - 0.08 * k, y: trayTop + eh / 2, z: mz, w: ERASER_SIZE.w * k, h: eh, d: ERASER_SIZE.h * k }
-  return { d, fw, trayW, trayH, trayD, trayY, trayTop, markers, eraser }
+  const ed = ERASER_SIZE.h * k
+  const eraser = { x: trayW / 2 - 0.08 * k, y: trayTop + eh / 2, z: (frameFront + lipBack) / 2, w: ERASER_SIZE.w * k, h: eh, d: ed }
+  return { d, fw, fd, trayW, trayH, trayD, trayY, trayTop, lipD, lipH, lipBack, frameFront, markers, eraser }
 }
 
 export const MARKER_IDS = ['black', 'blue', 'red'] as const
@@ -144,8 +153,8 @@ export function trayItems(size: [number, number], k: number, highContrast = fals
     return { x: u - w / 2, y: top, w, h: v + h / 2 - top }
   }
   return [
-    ...g.markers.map((m, i) => ({ id: MARKER_IDS[i], kind: 'marker' as const, color: colors[i], rect: rect(m.x, m.y, m.w, m.h * 1.8) })),
-    { id: 'eraser', kind: 'eraser' as const, color: '#2d3748', rect: rect(g.eraser.x, g.eraser.y, g.eraser.w, g.eraser.h * 1.3) },
+    ...g.markers.map((m, i) => ({ id: MARKER_IDS[i], kind: 'marker' as const, color: colors[i], rect: rect(m.x, m.y, m.w, m.h * 1.8), z: m.z, depth: m.h * 1.6 })),
+    { id: 'eraser', kind: 'eraser' as const, color: '#2d3748', rect: rect(g.eraser.x, g.eraser.y, g.eraser.w, g.eraser.h * 1.3), z: g.eraser.z, depth: g.eraser.d },
   ]
 }
 

@@ -119,9 +119,10 @@ export function TrayTools({ layout, models, opacity }: { layout: BoardLayout<Whi
     if (!id || !isMarkerId(id)) return
     const mesh = meshes[id]
     mesh.visible = toolId !== id
-    // Lying along the tray, capped, nib to the left and label facing out: the model's origin is the nib tip
+    // Lying along the tray, capped, nib to the left: the model's origin is the nib tip
     // and its barrel runs up +Y, so center the capped length on the slot.
-    mesh.rotation.set(0, 0, -Math.PI / 2)
+    // Turned about its own axis so the clip (and label, model +Z) faces up: the barrel then rests on the shelf.
+    mesh.rotation.set(0, -Math.PI / 2, -Math.PI / 2, 'ZYX')
     mesh.scale.setScalar(k)
     mesh.position.set(m.x - (MARKER_LENGTH / 2 - MARKER_TIP_OVERHANG) * k, m.y, m.z)
   })
