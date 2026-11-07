@@ -1,3 +1,4 @@
+import type { BoardAway } from './anchors'
 import { createXRStore } from '@react-three/xr'
 import { create } from 'zustand'
 import type { PlacementMode } from '../data/model'
@@ -51,6 +52,10 @@ interface XRAppState {
   caps: SessionCapabilities
   /** Mode the app returns to when the session ends. */
   returnMode: ViewMode
+  /** The board is out of reach: in another room, or its anchor can't be found here (see boardAway()). */
+  boardAway: BoardAway
+  /** The user chose to leave it there; asked again only after it has been within reach. */
+  awayDismissed: boolean
   setPhase(phase: XRPhase): void
   set(changes: Partial<Omit<XRAppState, 'set' | 'setPhase'>>): void
 }
@@ -63,6 +68,8 @@ export const useXRApp = create<XRAppState>()((set) => ({
   menuOpen: false,
   caps: EMPTY_SESSION_CAPS,
   returnMode: '3d',
+  boardAway: null,
+  awayDismissed: false,
   setPhase: (phase) => set({ phase, phaseAt: performance.now() }),
   set: (changes) => set(changes),
 }))

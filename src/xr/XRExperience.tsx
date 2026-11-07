@@ -12,7 +12,7 @@ import type { BoardLayout } from '../board/layout'
 import { toLocal } from '../board/space'
 import { Button3D, Label } from '../ui/xr/primitives'
 import { useVoice } from '../voice/voice'
-import { BoardMenu3D, DetailPanel3D, NotFoundPanel, PlacementChooser, Toast3D } from '../ui/xr/panels'
+import { BoardAwayPanel, BoardMenu3D, DetailPanel3D, NotFoundPanel, PlacementChooser, Toast3D } from '../ui/xr/panels'
 import { Keyboard3D } from '../ui/xr/Keyboard3D'
 import { toast } from '../ui/toasts'
 import { playSound } from '../fx/audio'
@@ -27,6 +27,7 @@ import {
   poseToMatrix,
   resetAnchorRuntime,
   restoreAnchor,
+  boardAway,
   TRACKING_LOST_MS,
 } from './anchors'
 import { PlacementController, type PlacementCandidate } from './placement/PlacementController'
@@ -98,6 +99,8 @@ export function XRExperience({ dark }: { dark: boolean }) {
   const placingMode = useXRApp((s) => s.placingMode)
   const placement = usePlacements((s) => s.placement)
   const scalePreset = useSettings((s) => s.scalePreset)
+  const boardAwayState = useXRApp((s) => s.boardAway)
+  const awayDismissed = useXRApp((s) => s.awayDismissed)
 
   // Session start: restore the persisted anchor if we can, else ask where to place.
   useEffect(() => {
@@ -105,9 +108,15 @@ export function XRExperience({ dark }: { dark: boolean }) {
     let cancelled = false
     const app = useXRApp.getState()
     const caps = detectSessionCapabilities(session, mode)
-    app.set({ caps, menuOpen: false, tracking: 'ok' })
+    app.set({ caps, menuOpen: false, tracking: 'ok', boardAway: null, awayDismissed: false })
     resetAnchorRuntime()
-    const p = usePlacements.getState().placement
+    let p = usePlacements.getState().placement
+    // Anchors given up outside AR (⋯ → Reset AR board position) can only be deleted from the headset now.
+    if (p?.staleAnchorHandles?.length) {
+      for (const h of p.staleAnchorHandles) void forgetAnchor(session, h)
+      usePlacements.getState().updatePlacement({ staleAnchorHandles: undefined })
+      p = usePlacements.getState().placement
+    }
     if (p) useSettings.getState().set({ skinId: p.skinId })
     if (p?.anchorHandle && caps.persistentAnchors) {
       app.setPhase('restoring')
@@ -207,6 +216,19 @@ export function XRExperience({ dark }: { dark: boolean }) {
           <NotFoundPanel onPlace={() => useXRApp.getState().setPhase('choose')} onFloat={floatHere} />
         </SpawnInFront>
       )}
+      {phase === 'working' && boardAwayState && !awayDismissed && (
+        <SpawnInFront key={`away-${boardAwayState}`}>
+          <BoardAwayPanel
+            reason={boardAwayState}
+            onPlace={() => {
+              useXRApp.getState().set({ placingMode: placement?.mode ?? 'wall' })
+              useXRApp.getState().setPhase('choose')
+            }}
+            onFloat={floatHere}
+            onLeave={() => useXRApp.getState().set({ awayDismissed: true })}
+          />
+        </SpawnInFront>
+      )}
       {phase === 'placing' && <PlacementController key={placingMode} mode={placingMode} size={size} tiltDeg={tilt} onConfirm={onConfirm} />}
       {(phase === 'adjusting' || phase === 'working') && placement && <AnchoredBoard dark={dark} />}
       <XRPhoneHud onChoose={startPlacing} />
@@ -225,6 +247,7 @@ function AnchoredBoard({ dark }: { dark: boolean }) {
   const session = useXR((s) => s.session)
   const originSpace = useXR((s) => s.originReferenceSpace)
   const gl = useThree((s) => s.gl)
+  const camera = useThree((s) => s.camera)
   const group = useRef<Group>(null)
   const [lost, setLost] = useState(false)
   const lostRef = useRef(false)
@@ -289,6 +312,19 @@ function AnchoredBoard({ dark }: { dark: boolean }) {
 
     g.matrix.copy(tmp.world)
     g.matrixWorldNeedsUpdate = true
+
+    // Out of reach? (Left in another room, or its anchor isn't in this space.) Offer to bring it here.
+    g.updateWorldMatrix(true, false)
+    tmp.p.setFromMatrixPosition(g.matrixWorld)
+    camera.getWorldPosition(tmp.a)
+    const app = useXRApp.getState()
+    const away = boardAway(app.boardAway, {
+      distance: tmp.p.distanceTo(tmp.a),
+      hasAnchor: !!rt.anchor,
+      hasPose: rt.hasPose,
+      msSinceRestore: now - app.phaseAt,
+    })
+    if (away !== app.boardAway) app.set(away ? { boardAway: away } : { boardAway: null, awayDismissed: false })
   })
 
   const [W, H] = placement.size
