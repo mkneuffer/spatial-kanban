@@ -117,3 +117,23 @@ export async function forgetAnchor(session: XRSession | undefined, handle: strin
     // Already gone.
   }
 }
+
+/** Farther than this (m) and the board is taken to be in another room. */
+export const AWAY_DISTANCE = 5
+/** ...and back within this (m), it's here again (a gap, so walking about near the line doesn't flicker). */
+export const NEAR_DISTANCE = 3.5
+/** A restored anchor that hasn't been located for this long (ms) is in a room the headset can't see. */
+export const UNTRACKED_MS = 4000
+
+export type BoardAway = 'far' | 'untracked' | null
+
+/**
+ * Is the board somewhere the user can't reach? `far`: it's more than AWAY_DISTANCE away (left in another
+ * room); `untracked`: its anchor came back from storage but the headset hasn't found it in this space.
+ */
+export function boardAway(prev: BoardAway, s: { distance: number; hasAnchor: boolean; hasPose: boolean; msSinceRestore: number }): BoardAway {
+  if (s.hasAnchor && !s.hasPose) return s.msSinceRestore > UNTRACKED_MS ? 'untracked' : prev === 'untracked' ? prev : null
+  if (s.distance > AWAY_DISTANCE) return 'far'
+  if (prev === 'far' && s.distance > NEAR_DISTANCE) return 'far'
+  return null
+}

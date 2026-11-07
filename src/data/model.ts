@@ -126,6 +126,8 @@ export interface Placement {
   deviceId: string
   mode: PlacementMode
   anchorHandle?: string // persistent anchor UUID, if supported
+  /** Persistent anchors given up outside AR (reset from the 2D menu); deleted from the headset next session. */
+  staleAnchorHandles?: string[]
   /**
    * anchor → board root. When no anchor exists this is the board pose in the
    * session's `local-floor` space.

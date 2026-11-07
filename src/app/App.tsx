@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useBoardStore } from '../data/store'
 import { useSettings, type Settings } from '../data/settings'
-import { usePlacements } from '../data/placements'
+import { hasSavedSpot, usePlacements } from '../data/placements'
 import type { ScalePreset } from '../data/model'
 import { createDemoBoard } from '../data/seed'
 import { exportDoc, importDoc } from '../data/persistence'
@@ -226,6 +226,7 @@ function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
   const ref = useRef<HTMLDivElement>(null)
   const file = useRef<HTMLInputElement>(null)
   const hasInk = useBoardStore((s) => (s.doc.board.ink?.length ?? 0) > 0)
+  const pinned = usePlacements((s) => hasSavedSpot(s.placement))
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
@@ -298,6 +299,20 @@ function MoreMenu({ onDialog }: { onDialog(d: DialogId): void }) {
           <button className="item" role="menuitem" onClick={() => (useIntegrations.getState().openPanel(), setOpen(false))}>
             Boards & integrations…
           </button>
+          {pinned && (
+            <button
+              className="item"
+              role="menuitem"
+              title="For a board left pinned in another room: forget where it's pinned, and place it again next time you enter AR"
+              onClick={() => {
+                usePlacements.getState().resetAnchor()
+                setOpen(false)
+                toast("AR board position reset. Next time you enter AR, you'll place the board where you are.", { tone: 'success', ms: 6000 })
+              }}
+            >
+              Reset AR board position
+            </button>
+          )}
           <button className="item" role="menuitem" onClick={() => (onDialog('archived'), setOpen(false))}>
             Archived cards…
           </button>

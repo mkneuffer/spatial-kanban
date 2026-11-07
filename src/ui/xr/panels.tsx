@@ -66,6 +66,25 @@ export function NotFoundPanel({ onPlace, onFloat }: { onPlace(): void; onFloat()
   )
 }
 
+/** The board is out of reach (another room, or not found in this space): bring it here, or leave it. */
+export function BoardAwayPanel({ reason, onPlace, onFloat, onLeave }: { reason: 'far' | 'untracked'; onPlace(): void; onFloat(): void; onLeave(): void }) {
+  return (
+    <Panel width={0.56} height={0.26} radius={0.026}>
+      <Label size={0.026} weight={700} position={[0, 0.08, 0]}>
+        {reason === 'far' ? 'Your board is in another room' : "Your board isn't in this room"}
+      </Label>
+      <Label size={0.015} color={UI.muted} position={[0, 0.038, 0]} maxWidth={0.5}>
+        {reason === 'far'
+          ? 'It\'s still pinned where you left it. Place it here instead, or leave it there.'
+          : "Its saved spot couldn't be found here. Place it in this room; your size and skin are kept."}
+      </Label>
+      <Button3D label="Place it here" variant="primary" width={0.17} height={0.05} position={[-0.18, -0.055, 0]} onClick={onPlace} />
+      <Button3D label="Float it here" width={0.16} height={0.05} position={[0, -0.055, 0]} onClick={onFloat} />
+      <Button3D label="Leave it" variant="ghost" width={0.14} height={0.05} position={[0.17, -0.055, 0]} onClick={onLeave} />
+    </Panel>
+  )
+}
+
 const PRESETS: Array<{ id: ScalePreset; label: string }> = [
   { id: 'poster', label: 'Poster' },
   { id: 'desk', label: 'Desk' },

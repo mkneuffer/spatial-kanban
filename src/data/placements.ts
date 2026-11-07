@@ -33,6 +33,12 @@ interface PlacementState {
   parkCard(cardId: ID, localOffset: Pose): void
   unparkCard(cardId: ID): void
   hydrate(placement: Placement | null, freeCards: FreeCardPlacement[]): void
+  /**
+   * Forget where the board is pinned (its spatial anchor), keeping its size, mode and skin: the next AR
+   * session asks where to place it. For a board stuck in another room. The headset's copy of the anchor
+   * can only be deleted inside a session, so its handle is kept to delete then.
+   */
+  resetAnchor(): void
 }
 
 export const usePlacements = create<PlacementState>()((set, get) => ({
@@ -56,7 +62,22 @@ export const usePlacements = create<PlacementState>()((set, get) => ({
     }),
   hydrate: (placement, freeCards) =>
     set({ placement, freeCards: Object.fromEntries(freeCards.map((f) => [f.cardId, f])) }),
+  resetAnchor: () => {
+    const p = get().placement
+    if (!p) return
+    const stale = [...(p.staleAnchorHandles ?? []), ...(p.anchorHandle ? [p.anchorHandle] : [])]
+    // Cards parked in the room were placed relative to the board; they go back onto it.
+    set({
+      placement: { ...p, anchorHandle: undefined, staleAnchorHandles: stale.length ? stale : undefined, localOffset: IDENTITY_POSE, updatedAt: new Date().toISOString() },
+      freeCards: {},
+    })
+  },
 }))
+
+/** True when the board has a saved spot in the room (so there is something to reset). */
+export function hasSavedSpot(p: Placement | null): boolean {
+  return !!p && (!!p.anchorHandle || p.localOffset.position.some((v) => v !== 0))
+}
 
 export function createPlacement(boardId: ID, mode: PlacementMode, skinId: string, size?: [number, number]): Placement {
   return {
