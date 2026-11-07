@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { onPaper, paperSurface } from '../../src/render/paper'
 import { addPoint, eraserPad, finishStroke, inkDiff, rubOut, toUnits } from '../../src/board/ink'
 import { useBoardStore } from '../../src/data/store'
 import { createDemoBoard } from '../../src/data/seed'
@@ -213,5 +214,49 @@ describe('the tray holds its markers and eraser properly', () => {
     const along = new Vector3(0, 1, 0).applyQuaternion(q)
     expect(up.y).toBeCloseTo(1)
     expect(along.x).toBeCloseTo(1)
+  })
+})
+
+describe('note content follows the paper curl', () => {
+  // A 11 cm note; pieces of content spread over it, from the top line to the bottom-right initials.
+  const w = 0.11, h = 0.11
+  const pieces = [
+    { top: 0.01, bottom: 0.035, right: 0.1, anchor: 0 },
+    { top: 0.045, bottom: 0.07, right: 0.1, anchor: 0 },
+    { top: 0.085, bottom: 0.1, right: 0.02, anchor: 0.5 },
+    { top: 0.086, bottom: 0.101, right: 0.101, anchor: 0.5 },
+  ]
+  it.each([0, 0.02, 0.12, 0.5, 1])('curl %s: every piece lies on or just above the paper, never behind it', (curl) => {
+    for (const pc of pieces) {
+      const p = onPaper(w, h, curl, pc.top, pc.bottom, pc.right, pc.anchor)
+      const anchorY = pc.top + (pc.bottom - pc.top) * pc.anchor
+      // The piece is a straight segment in (rendered y down the note, lift): through its anchor, at its tilt.
+      const ay = anchorY - p.dy
+      const pieceAt = (yr: number) => p.dz + Math.tan(-p.tilt) * (yr - ay)
+      for (let i = 0; i <= 40; i++) {
+        const y = pc.top + ((pc.bottom - pc.top) * i) / 40
+        for (const x of [0, pc.right]) {
+          // The paper point that started at y is drawn slid up by dy and lifted by dz.
+          const s0 = paperSurface(w, h, curl, x / w, 1 - y / h)
+          const yr = y - s0.dy
+          expect(pieceAt(yr)).toBeGreaterThanOrEqual(s0.dz - 1e-4 * h)
+          // ...and stays close to it: the content curls with the note rather than floating off it.
+          expect(pieceAt(yr) - s0.dz).toBeLessThan(0.006)
+        }
+      }
+      // The piece's ends land on the paper's ends (within its 0.7 mm text offset's worth).
+      const len = (pc.bottom - pc.top) * p.yScale
+      const end = { y: ay + Math.cos(p.tilt) * len * (1 - pc.anchor), z: p.dz + Math.sin(-p.tilt) * len * (1 - pc.anchor) }
+      const b = paperSurface(w, h, curl, pc.right / w, 1 - pc.bottom / h)
+      if (pc.right / w <= 0.72) {
+        expect(Math.abs(end.y - (pc.bottom - b.dy))).toBeLessThan(2e-4)
+        expect(Math.abs(end.z - b.dz)).toBeLessThan(2e-4)
+      }
+    }
+  })
+  it('flat notes keep flat content', () => {
+    const p = onPaper(w, h, 0, 0.01, 0.035, 0.05, 0)
+    expect(p.tilt).toBeCloseTo(0, 12)
+    expect(p.dz).toBeCloseTo(0, 12)
   })
 })

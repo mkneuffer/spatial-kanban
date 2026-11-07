@@ -11,6 +11,7 @@ import {
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   Object3D,
+  Euler,
   Quaternion,
   Vector3,
   type Material,
@@ -160,6 +161,8 @@ export interface ChipSpec {
   /** Thickness; 0 for flat plates. */
   d?: number
   rot?: number
+  /** Tilt about the chip's own x axis (radians), applied before `rot`: lets a chip lie on a curled note. */
+  tilt?: number
   /** Horizontal squash for flip transitions (1 = none). */
   sx?: number
   scale?: number
@@ -171,6 +174,7 @@ export interface ChipSpec {
 
 const _m = new Matrix4()
 const _q = new Quaternion()
+const _e = new Euler()
 const _p = new Vector3()
 const _s = new Vector3()
 const _z = new Vector3(0, 0, 1)
@@ -242,7 +246,8 @@ export class ChipBatch {
     }
     const i = this.count++
     const s = c.scale ?? 1
-    _q.setFromAxisAngle(_z, c.rot ?? 0)
+    if (c.tilt) _q.setFromEuler(_e.set(c.tilt, 0, c.rot ?? 0, 'ZYX'))
+    else _q.setFromAxisAngle(_z, c.rot ?? 0)
     _p.set(c.x, c.y, c.z)
     _s.set(s * (c.sx ?? 1), s, s)
     _m.compose(_p, _q, _s)
